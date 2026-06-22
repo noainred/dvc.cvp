@@ -22,8 +22,12 @@ def client_ip(request: Request) -> str:
 
 
 def require_admin(request: Request, db: Session = Depends(get_db)) -> None:
-    """During initial setup (auth disabled) allow; otherwise require a session."""
-    if not auth_svc.auth_enabled(db):
+    """Allow during setup/recovery (login not actually enforced) else need session.
+
+    Uses ``auth_required`` (enabled AND an active account exists) so that when
+    login is on but no account exists yet, the account can still be created.
+    """
+    if not auth_svc.auth_required(db):
         return
     if request.session.get("uid"):
         return
@@ -54,6 +58,7 @@ def state(request: Request, db: Session = Depends(get_db)):
     uid = request.session.get("uid")
     return {
         "auth_enabled": auth_svc.auth_enabled(db),
+        "auth_required": auth_svc.auth_required(db),
         "authenticated": bool(uid),
         "username": request.session.get("username"),
         "has_user": auth_svc.has_active_user(db),

@@ -49,9 +49,13 @@ function hideLogin() { $("#loginOverlay").hidden = true; }
 async function checkAuth() {
   try {
     const st = await api("/api/auth/state");
-    if (st.auth_enabled && !st.authenticated) { showLogin(); return false; }
+    // Only block when login is actually enforced (enabled AND an account exists).
+    if (st.auth_required && !st.authenticated) { showLogin(); return false; }
     hideLogin();
-    $("#logoutBtn").hidden = !st.auth_enabled;
+    $("#logoutBtn").hidden = !st.authenticated;
+    if (st.auth_enabled && !st.has_user) {
+      $("#globalStatus").textContent = "로그인 켜짐 · 계정 없음 → [보안]에서 계정 등록 필요";
+    }
     return true;
   } catch (_) { return false; }
 }

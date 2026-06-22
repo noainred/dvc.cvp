@@ -159,9 +159,18 @@ CLI로 업그레이드하려면: `bash deploy/upgrade.sh`
 - **로그인**: 사용자 이름 + **TOTP(Google Authenticator) 6자리 코드**로만 로그인
   합니다(비밀번호 없음). [보안] 탭에서 계정을 만들고 QR을 스캔해 인증한 뒤
   "로그인 요구"를 켜세요. (계정이 없으면 켤 수 없어 잠김을 방지합니다.)
+- **잠금 방지**: 로그인은 "활성 계정이 1개 이상 있을 때만" 실제로 적용됩니다.
+  계정이 없으면(설정만 켜둔 상태) 잠기지 않고 열려 있어 계정을 만들 수 있습니다.
+- **복구 (잠겼을 때)**: 라즈베리파이 터미널에서 관리 CLI로 즉시 해제할 수 있습니다.
+  ```bash
+  source .venv/bin/activate
+  python manage.py disable-auth                 # 로그인 요구 끄기
+  python manage.py add-user <이름> --enable      # 계정 바로 만들기(QR 출력)
+  python manage.py list-users                   # 계정 목록
+  ```
 - **무차별 대입 차단(앱)**: 한 IP가 정해진 횟수(기본 3회) 이상 실패하면 해당 IP를
   지정 시간(기본 15분) 동안 차단합니다. 임계값·차단시간·집계창은 [보안] 탭에서 제어,
-  차단 목록은 조회/해제할 수 있습니다.
+  차단 목록은 조회/해제할 수 있습니다 (`python manage.py bans` / `unban <ip>`).
 - **OS 차단(fail2ban)**: SSH 등 OS 레벨 차단은 fail2ban과 연동합니다.
   설치: `sudo apt install fail2ban`. [보안] 탭에서 정책(maxretry/bantime/findtime)을
   저장하면 `/etc/fail2ban/jail.d/homelab-monitor.local`을 쓰고 reload를 시도합니다.

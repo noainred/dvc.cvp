@@ -157,7 +157,8 @@ async def auth_guard(request, call_next):
     path = request.url.path
     db = SessionLocal()
     try:
-        enabled = auth_svc.auth_enabled(db)
+        # Enforced only when login is on AND a verified account exists (no lockout).
+        enabled = auth_svc.auth_required(db)
         ban = auth_svc.is_banned(db, _client_ip(request)) if enabled else None
     finally:
         db.close()

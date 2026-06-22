@@ -37,6 +37,7 @@ def security_cfg(db: Session) -> Dict[str, Any]:
 
 
 def auth_enabled(db: Session) -> bool:
+    """Whether the operator turned login on (the setting flag)."""
     return bool(security_cfg(db).get("auth_enabled"))
 
 
@@ -44,6 +45,16 @@ def has_active_user(db: Session) -> bool:
     return (
         db.execute(select(func.count()).select_from(User).where(User.enabled.is_(True))).scalar() or 0
     ) > 0
+
+
+def auth_required(db: Session) -> bool:
+    """Whether login is actually enforced.
+
+    Login is only enforced when it is enabled AND at least one verified account
+    exists. With zero accounts there is nothing to authenticate against, so we
+    leave the app open (setup mode) - this prevents a permanent lockout.
+    """
+    return auth_enabled(db) and has_active_user(db)
 
 
 # --- users ------------------------------------------------------------------
