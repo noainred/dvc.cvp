@@ -20,6 +20,7 @@
 | **시놀로지 관리** | DSM API로 CPU/메모리/온도/가동시간/볼륨 사용량 모니터링 |
 | **공유기 관리** | 연결 상태·지연 + (SNMP 사용 시) 가동시간·WAN 트래픽, 관리 페이지 바로가기 |
 | **웹 UI에서 모든 설정** | 장비 추가/수정/삭제, 측정 주기, 보관 기간, 시놀로지/공유기 연결을 브라우저에서 관리 |
+| **버전 표시 / 자동 업그레이드** | 헤더·설정에 현재 버전(앱 버전+git 커밋) 표시, 웹에서 업데이트 확인·즉시 업그레이드, 주기적 자동 업데이트(옵션) |
 
 ---
 
@@ -119,6 +120,29 @@ pip install pysnmp-lextudio    # 공유기 SNMP 트래픽/가동시간 조회
 
 ---
 
+## 🔄 버전 표시 & 자동 업그레이드
+
+- **버전 표시**: 헤더와 [설정] > 버전/자동 업그레이드에 현재 버전(`vX.Y.Z`)과 git
+  커밋·브랜치가 표시됩니다. 새 버전이 있으면 헤더 버전 배지가 강조됩니다.
+- **수동 업그레이드**: [설정]에서 **업데이트 확인** → **지금 업그레이드**를 누르면
+  `git pull --ff-only` → `pip install -r requirements.txt` → **자동 재시작**이
+  수행되고 진행 로그가 실시간으로 표시됩니다.
+- **자동 업데이트(옵션)**: `update.auto_check` 로 주기적으로 새 버전을 확인하고,
+  `update.auto_apply` 를 켜면 새 버전을 자동 설치·재시작합니다.
+
+재시작 방식(우선순위):
+1. `HOMELAB_RESTART_CMD` 환경변수가 있으면 그 명령 실행
+   (예: `sudo systemctl restart homelab-monitor`, sudoers NOPASSWD 필요)
+2. 없으면 현재 프로세스를 **그 자리에서 재실행**(`python run.py` 무중단 갱신)
+3. systemd 서비스는 `Restart=always` 라 어떤 경우든 새 코드로 복구됩니다.
+
+> ⚠️ 자동 업그레이드는 설정된 git 원격에서 코드를 받아 실행하므로, 신뢰하는
+> 저장소에만 연결하세요. 끄려면 `update.allow_manual: false`, `auto_check: false`.
+
+CLI로 업그레이드하려면: `bash deploy/upgrade.sh`
+
+---
+
 ## 🔌 주요 API
 
 | 메서드 | 경로 | 설명 |
@@ -132,6 +156,9 @@ pip install pysnmp-lextudio    # 공유기 SNMP 트래픽/가동시간 조회
 | GET | `/api/synology/status` · `/api/synology/history` | 시놀로지 상태/이력 |
 | GET | `/api/router/status` | 공유기 상태 |
 | GET/PUT | `/api/settings` | 런타임 설정 조회/변경 |
+| GET | `/api/system/version` | 현재 버전/커밋 |
+| GET | `/api/system/update-check` | 업데이트 확인 |
+| POST | `/api/system/upgrade` | 즉시 업그레이드(+재시작) |
 
 대화형 API 문서: `http://<IP>:8080/docs`
 

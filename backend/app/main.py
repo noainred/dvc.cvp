@@ -71,12 +71,14 @@ from .api import router as router_api  # noqa: E402
 from .api import settings as settings_api  # noqa: E402
 from .api import speedtest as speedtest_api  # noqa: E402
 from .api import synology as synology_api  # noqa: E402
+from .api import system as system_api  # noqa: E402
 
 app.include_router(devices_api.router)
 app.include_router(speedtest_api.router)
 app.include_router(synology_api.router)
 app.include_router(router_api.router)
 app.include_router(settings_api.router)
+app.include_router(system_api.router)
 
 
 @app.get("/api/health")

@@ -470,6 +470,12 @@ const SETTINGS_SCHEMA = [
     { key: "password", label: "비밀번호", type: "password" },
     { key: "poll_seconds", label: "폴링 주기 (초)", type: "number" },
   ]},
+  { group: "update", title: "자동 업그레이드", fields: [
+    { key: "auto_check", label: "자동 업데이트 확인", type: "checkbox" },
+    { key: "check_interval_hours", label: "확인 주기 (시간)", type: "number" },
+    { key: "auto_apply", label: "새 버전 자동 설치+재시작", type: "checkbox" },
+    { key: "allow_manual", label: "수동 업그레이드 허용", type: "checkbox" },
+  ]},
   { group: "router", title: "공유기", fields: [
     { key: "enabled", label: "사용", type: "checkbox" },
     { key: "host", label: "호스트/IP", type: "text" },
@@ -481,8 +487,81 @@ const SETTINGS_SCHEMA = [
   ]},
 ];
 
+// --- Version & auto-upgrade ---
+async function loadVersion() {
+  try {
+    const v = await api("/api/system/version");
+    let txt = "v" + v.version + (v.commit ? " · " + v.commit : "");
+    $("#appVersion").textContent = txt;
+    const cur = $("#curVersion");
+    if (cur) cur.textContent = txt + (v.branch ? " (" + v.branch + ")" : "");
+    return v;
+  } catch (_) { /* ignore */ }
+}
+
+async function checkUpdate(busy, fetch = true) {
+  const state = $("#updateState");
+  const badge = $("#appVersion");
+  if (busy) state.textContent = "확인 중…";
+  try {
+    const r = await api("/api/system/update-check?fetch=" + (fetch ? "true" : "false"));
+    if (r.supported === false) { state.textContent = "git 저장소가 아니어서 업데이트를 확인할 수 없습니다."; return; }
+    if (r.error) { state.textContent = "오류: " + r.error; return; }
+    if (r.up_to_date) {
+      state.textContent = "최신 버전입니다.";
+      badge.classList.remove("update");
+    } else {
+      state.innerHTML = `<span style="color:var(--warn)">새 버전 ${r.behind}개 커밋 사용 가능</span>` +
+        (r.latest_message ? ` — 최신: ${r.latest_message}` : "");
+      badge.classList.add("update");
+      badge.title = "업데이트 가능";
+    }
+  } catch (err) {
+    if (busy) state.textContent = "오류: " + err.message;
+  }
+}
+
+let upgradePoll = null;
+async function pollUpgrade() {
+  const logEl = $("#upgradeLog");
+  try {
+    const s = await api("/api/system/upgrade-status");
+    logEl.hidden = false;
+    logEl.textContent = s.log || "";
+    logEl.scrollTop = logEl.scrollHeight;
+    if (s.status === "success") $("#updateState").textContent = "업그레이드 완료 — 재시작 중일 수 있습니다.";
+    if (s.status === "error") $("#updateState").textContent = "업그레이드 실패 — 로그를 확인하세요.";
+  } catch (_) {
+    logEl.textContent += "\n(서버 재시작 중…)";
+  }
+}
+
+$("#checkUpdate").addEventListener("click", () => checkUpdate(true, true));
+$("#doUpgrade").addEventListener("click", async () => {
+  if (!confirm("최신 버전으로 업그레이드할까요? 완료 후 서버가 재시작됩니다.")) return;
+  const logEl = $("#upgradeLog");
+  logEl.hidden = false;
+  logEl.textContent = "업그레이드 시작…";
+  try {
+    const r = await api("/api/system/upgrade", { method: "POST" });
+    if (r.status === "error") { logEl.textContent = "오류: " + r.error; return; }
+    if (r.status === "running") { logEl.textContent = "이미 업그레이드가 진행 중입니다."; }
+    if (upgradePoll) clearInterval(upgradePoll);
+    let ticks = 0;
+    upgradePoll = setInterval(async () => {
+      ticks++;
+      await pollUpgrade();
+      if (ticks > 90) { clearInterval(upgradePoll); loadVersion(); checkUpdate(false, false); }
+    }, 2000);
+  } catch (err) {
+    logEl.textContent = "오류: " + err.message;
+  }
+});
+
 let settingsData = {};
 async function loadSettings() {
+  loadVersion();
+  checkUpdate(false, false);
   settingsData = await api("/api/settings");
   const form = $("#settingsForm");
   form.innerHTML = SETTINGS_SCHEMA.map((grp) => {
@@ -530,6 +609,7 @@ $("#saveSettings").addEventListener("click", async () => {
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
+loadVersion();
 loadDashboard();
 setInterval(() => {
   if ($("#dashboard").classList.contains("active")) loadDashboard();

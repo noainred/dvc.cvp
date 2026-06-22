@@ -45,6 +45,13 @@ speedtest:
   #   ookla  : 공식 `speedtest` 바이너리 사용
   method: "auto"
 
+# --- 자동 업그레이드 (선택) ---
+update:
+  auto_check: true            # 주기적으로 새 버전 확인
+  check_interval_hours: 24    # 확인 주기 (시간)
+  auto_apply: false           # true 면 새 버전 발견 시 자동으로 설치+재시작
+  allow_manual: true          # 웹에서 "지금 업그레이드" 버튼 허용
+
 # --- 시놀로지 (선택) ---
 synology:
   enabled: false

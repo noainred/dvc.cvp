@@ -23,6 +23,7 @@ from .monitors import speedtest as speedtest_mod
 from .monitors import synology as synology_mod
 from .services import rollup as rollup_svc
 from .services import settings as settings_svc
+from .services import system as system_svc
 from .services import uptime as uptime_svc
 
 log = logging.getLogger(__name__)
@@ -148,6 +149,23 @@ def job_prune() -> None:
         )
 
 
+def job_auto_upgrade() -> None:
+    """Periodically check for updates and (optionally) apply them."""
+    with session_scope() as db:
+        cfg = settings_svc.get(db, "update")
+    if not cfg.get("auto_check", True):
+        return
+    if not system_svc.is_git_repo():
+        return
+    result = system_svc.check_updates(fetch=True)
+    behind = result.get("behind", 0)
+    if behind and cfg.get("auto_apply", False):
+        log.info("Auto-upgrade: %d commit(s) behind, applying", behind)
+        system_svc.perform_upgrade(restart=True)
+    elif behind:
+        log.info("Update available: %d commit(s) behind upstream", behind)
+
+
 def job_router_poll() -> None:
     """Keep WAN throughput counters warm so the router page shows live rates."""
     with session_scope() as db:
@@ -167,6 +185,7 @@ def job_reconcile() -> None:
     with session_scope() as db:
         mon = settings_svc.get(db, "monitoring")
         spd = settings_svc.get(db, "speedtest")
+        upd = settings_svc.get(db, "update")
 
     monitor_secs = max(10, int(mon.get("interval_seconds", 60)))
     if _current_intervals.get("monitor") != monitor_secs:
@@ -186,6 +205,12 @@ def job_reconcile() -> None:
         _current_intervals["speedtest"] = speed_mins
         log.info("Rescheduled speedtest job to every %d min", speed_mins)
 
+    upd_hours = max(1, int(upd.get("check_interval_hours", 24)))
+    if _current_intervals.get("update") != upd_hours:
+        scheduler.reschedule_job("autoupgrade", trigger="interval", hours=upd_hours)
+        _current_intervals["update"] = upd_hours
+        log.info("Rescheduled auto-update check to every %dh", upd_hours)
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -195,10 +220,12 @@ def start() -> None:
         mon = settings_svc.get(db, "monitoring")
         spd = settings_svc.get(db, "speedtest")
         syn = settings_svc.get(db, "synology")
+        upd = settings_svc.get(db, "update")
 
     monitor_secs = max(10, int(mon.get("interval_seconds", 60)))
     speed_mins = int(spd.get("interval_minutes", 360))
     syn_secs = int(syn.get("poll_seconds", 300))
+    upd_hours = max(1, int(upd.get("check_interval_hours", 24)))
 
     scheduler.add_job(job_monitor, "interval", seconds=monitor_secs, id="monitor",
                       max_instances=1, coalesce=True, next_run_time=dt.datetime.utcnow())
@@ -211,13 +238,16 @@ def start() -> None:
     scheduler.add_job(job_rollup, "interval", minutes=10, id="rollup",
                       max_instances=1, coalesce=True)
     scheduler.add_job(job_prune, "cron", hour=4, minute=15, id="prune", max_instances=1)
+    scheduler.add_job(job_auto_upgrade, "interval", hours=upd_hours, id="autoupgrade",
+                      max_instances=1, coalesce=True,
+                      next_run_time=dt.datetime.utcnow() + dt.timedelta(minutes=2))
     scheduler.add_job(job_reconcile, "interval", seconds=30, id="reconcile",
                       max_instances=1, coalesce=True)
 
     if speed_mins <= 0:
         scheduler.pause_job("speedtest")
 
-    _current_intervals.update({"monitor": monitor_secs, "speedtest": speed_mins})
+    _current_intervals.update({"monitor": monitor_secs, "speedtest": speed_mins, "update": upd_hours})
     scheduler.start()
     log.info("Scheduler started (monitor=%ds, speedtest=%dmin)", monitor_secs, speed_mins)
 

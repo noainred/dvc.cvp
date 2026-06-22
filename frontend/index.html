@@ -12,6 +12,7 @@
     <div class="brand">
       <span class="logo">🏠</span>
       <span>HomeLab Monitor</span>
+      <span class="version" id="appVersion" title="버전"></span>
     </div>
     <nav class="tabs">
       <button class="tab active" data-tab="dashboard">대시보드</button>
@@ -105,6 +106,16 @@
 
     <!-- 설정 -->
     <section id="settings" class="page">
+      <div class="settings-group" id="updatePanel">
+        <h3>버전 / 자동 업그레이드</h3>
+        <div class="settings-row"><label>현재 버전</label><span id="curVersion" class="muted">—</span></div>
+        <div class="settings-row"><label>업데이트 상태</label><span id="updateState" class="muted">—</span></div>
+        <div class="toolbar" style="margin:8px 0 0">
+          <button class="btn" id="checkUpdate">업데이트 확인</button>
+          <button class="btn primary" id="doUpgrade">지금 업그레이드</button>
+        </div>
+        <pre id="upgradeLog" class="upgrade-log" hidden></pre>
+      </div>
       <form id="settingsForm" class="settings-form"></form>
       <div class="toolbar">
         <button class="btn primary" id="saveSettings">저장</button>

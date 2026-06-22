@@ -25,6 +25,12 @@ DEFAULTS: Dict[str, Any] = {
     "monitoring": {"interval_seconds": 60, "concurrency": 16, "timeout_seconds": 2},
     "retention": {"raw_days": 90, "hourly_days": 400},
     "speedtest": {"enabled": True, "interval_minutes": 360, "method": "auto"},
+    "update": {
+        "auto_check": True,
+        "check_interval_hours": 24,
+        "auto_apply": False,
+        "allow_manual": True,
+    },
     "synology": {
         "enabled": False,
         "host": "",

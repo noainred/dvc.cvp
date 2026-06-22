@@ -23,6 +23,7 @@ _SEED_MAP = {
     "speedtest": "speedtest",
     "synology": "synology",
     "router": "router",
+    "update": "update",
 }
 
 
