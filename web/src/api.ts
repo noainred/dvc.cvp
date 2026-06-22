@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type {
+  ComplianceResp,
+  Congestion,
   DeviceTrendResponse,
+  Flow,
   Interface,
   LivePayload,
+  ReclaimPort,
   Sample,
+  Topology,
   TrendResponse,
   UpgradeStatus
 } from './types'
@@ -35,7 +40,13 @@ export const api = {
   applyUpgrade: () => postJSON<{ status: string; detail: string }>('/api/upgrade'),
   trend: (days = 30) => getJSON<TrendResponse>(`/api/trend?days=${days}`),
   deviceTrend: (serial: string, days = 30) =>
-    getJSON<DeviceTrendResponse>(`/api/devices/${encodeURIComponent(serial)}/trend?days=${days}`)
+    getJSON<DeviceTrendResponse>(`/api/devices/${encodeURIComponent(serial)}/trend?days=${days}`),
+  topology: (dc: string) => getJSON<Topology>(`/api/topology?dc=${encodeURIComponent(dc)}`),
+  flows: (dc = '', limit = 30) => getJSON<Flow[]>(`/api/flows?dc=${encodeURIComponent(dc)}&limit=${limit}`),
+  congestion: (dc = '', limit = 50) =>
+    getJSON<Congestion[]>(`/api/congestion?dc=${encodeURIComponent(dc)}&limit=${limit}`),
+  reclaim: (days = 30) => getJSON<ReclaimPort[]>(`/api/reclaim?days=${days}`),
+  compliance: () => getJSON<ComplianceResp>('/api/compliance')
 }
 
 // useLive subscribes to the SSE stream and returns the latest fleet snapshot

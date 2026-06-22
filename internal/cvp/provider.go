@@ -113,6 +113,7 @@ func (p *Provider) pollDC(ctx context.Context, dc *dcRuntime) (model.DataCenter,
 			DataCenter: dc.cfg.ID,
 			Role:       role(cd.ModelName),
 			Status:     streamStatus(cd),
+			Compliance: complianceFromCode(cd.ComplianceCode),
 		}
 		if dev.MgmtIP == "" {
 			mu.Lock()
@@ -175,6 +176,17 @@ func role(model string) string {
 		return "mgmt"
 	default:
 		return ""
+	}
+}
+
+// complianceFromCode maps a CVP complianceCode to our compliance status.
+// CVP uses "0000" (or empty) for compliant; any other code indicates drift.
+func complianceFromCode(code string) string {
+	switch code {
+	case "", "0000":
+		return model.ComplianceOK
+	default:
+		return model.ComplianceNon
 	}
 }
 

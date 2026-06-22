@@ -8,11 +8,32 @@ import { DeviceView } from './views/DeviceView'
 import { VersionBadge } from './components/VersionBadge'
 import { AlertsBar } from './components/AlertsPanel'
 import { TrendPanel } from './components/TrendPanel'
+import {
+  ComplianceView,
+  CongestionView,
+  FlowsView,
+  ReclaimView,
+  TopologyView
+} from './views/MoreViews'
 
 type Route =
   | { view: 'overview' }
   | { view: 'dc'; id: string }
   | { view: 'device'; serial: string }
+  | { view: 'topology' }
+  | { view: 'flows' }
+  | { view: 'congestion' }
+  | { view: 'reclaim' }
+  | { view: 'compliance' }
+
+const NAV: { key: Route['view']; label: string }[] = [
+  { key: 'overview', label: '현황' },
+  { key: 'topology', label: '토폴로지' },
+  { key: 'flows', label: 'Top Talkers' },
+  { key: 'congestion', label: '혼잡(LANZ)' },
+  { key: 'reclaim', label: '포트 회수' },
+  { key: 'compliance', label: '컴플라이언스' }
+]
 
 export default function App() {
   const { live, connected } = useLive()
@@ -45,6 +66,18 @@ export default function App() {
           <VersionBadge />
         </div>
       </header>
+
+      <nav className="tabs">
+        {NAV.map((t) => (
+          <button
+            key={t.key}
+            className={`tab${route.view === t.key ? ' active' : ''}`}
+            onClick={() => setRoute({ view: t.key } as Route)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
 
       <nav className="breadcrumb">
         <a onClick={() => setRoute({ view: 'overview' })}>전체 현황</a>
@@ -94,6 +127,14 @@ export default function App() {
 
         {live && route.view === 'device' && (
           <DeviceView serial={route.serial} device={currentDevice} />
+        )}
+
+        {live && route.view === 'topology' && <TopologyView datacenters={datacenters} />}
+        {live && route.view === 'flows' && <FlowsView datacenters={datacenters} />}
+        {live && route.view === 'congestion' && <CongestionView datacenters={datacenters} />}
+        {live && route.view === 'reclaim' && <ReclaimView />}
+        {live && route.view === 'compliance' && (
+          <ComplianceView onDevice={(serial) => setRoute({ view: 'device', serial })} />
         )}
       </main>
     </div>

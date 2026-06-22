@@ -58,6 +58,15 @@ type eapiXcvr struct {
 	RxPower     float64 `json:"rxPower"`
 }
 
+// lldpResult decodes the `show lldp neighbors` command output.
+type lldpResult struct {
+	LldpNeighbors []struct {
+		Port           string `json:"port"`
+		NeighborDevice string `json:"neighborDevice"`
+		NeighborPort   string `json:"neighborPort"`
+	} `json:"lldpNeighbors"`
+}
+
 type eapiIface struct {
 	Name               string  `json:"name"`
 	Description        string  `json:"description"`
@@ -81,7 +90,7 @@ func fetchInterfaces(ctx context.Context, hc *http.Client, ip, user, pass string
 	reqBody, _ := json.Marshal(eapiReq{
 		JSONRPC: "2.0",
 		Method:  "runCmds",
-		Params:  eapiParam{Version: 1, Cmds: []string{"show interfaces", "show interfaces transceiver"}, Format: "json"},
+		Params:  eapiParam{Version: 1, Cmds: []string{"show interfaces", "show interfaces transceiver", "show lldp neighbors"}, Format: "json"},
 		ID:      "dvc-cvp",
 	})
 	url := fmt.Sprintf("https://%s/command-api", ip)
@@ -125,6 +134,16 @@ func fetchInterfaces(ctx context.Context, hc *http.Client, ip, user, pass string
 			xcvr = xr.Interfaces
 		}
 	}
+	// LLDP neighbors (third command) for topology — also best-effort.
+	lldp := map[string]string{} // local port -> neighbor device
+	if len(er.Result) > 2 {
+		var lr lldpResult
+		if err := json.Unmarshal(er.Result[2], &lr); err == nil {
+			for _, n := range lr.LldpNeighbors {
+				lldp[n.Port] = n.NeighborDevice
+			}
+		}
+	}
 
 	now := time.Now()
 	ports := make([]collector.PortSample, 0, len(ir.Interfaces))
@@ -152,6 +171,9 @@ func fetchInterfaces(ctx context.Context, hc *http.Client, ip, user, pass string
 		}
 		if x, ok := xcvr[name]; ok {
 			applyXcvr(&p, x, oper)
+		}
+		if nb := lldp[name]; nb != "" {
+			p.Neighbor = nb
 		}
 		ports = append(ports, p)
 	}

@@ -156,6 +156,71 @@ export interface DeviceTrendResponse {
   throughput: Trend
 }
 
+export interface TopologyNode {
+  id: string
+  hostname: string
+  role: string
+  status: string
+  dataCenter: string
+}
+export interface TopologyLink {
+  a: string
+  b: string
+  count: number
+}
+export interface Topology {
+  nodes: TopologyNode[]
+  links: TopologyLink[]
+}
+
+export interface Flow {
+  dataCenter: string
+  device: string
+  hostname: string
+  srcIp: string
+  dstIp: string
+  proto: string
+  port: number
+  app: string
+  bps: number
+}
+
+export interface Congestion {
+  dataCenter: string
+  device: string
+  hostname: string
+  interface: string
+  queueDepthKb: number
+  durationMs: number
+  drops: number
+  severity: string
+  time: string
+}
+
+export interface ReclaimPort {
+  dataCenter: string
+  device: string
+  hostname: string
+  interface: string
+  hasTransceiver: boolean
+  mediaType?: string
+  speedBps: number
+  lastChange: string
+  idleDays: number
+}
+
+export interface ComplianceRow {
+  version: string
+  count: number
+  nonCompliant: number
+}
+export interface ComplianceResp {
+  total: number
+  nonCompliant: number
+  byVersion: ComplianceRow[]
+  devices: Device[]
+}
+
 export interface UpgradeStatus {
   current: string
   commit: string

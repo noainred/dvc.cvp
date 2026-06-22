@@ -64,6 +64,7 @@ type Device struct {
 	DataCenter    string    `json:"dataCenter"`
 	Role          string    `json:"role"` // spine / leaf / mgmt
 	Status        string    `json:"status"`
+	Compliance    string    `json:"compliance"` // ok | noncompliant | unknown
 	UptimeSec     int64     `json:"uptimeSec"`
 	PortTotal     int       `json:"portTotal"`
 	PortUp        int       `json:"portUp"`
@@ -161,6 +162,70 @@ type Summary struct {
 type FamilyCount struct {
 	Family string `json:"family"`
 	Count  int    `json:"count"`
+}
+
+// Compliance states.
+const (
+	ComplianceOK      = "ok"
+	ComplianceNon     = "noncompliant"
+	ComplianceUnknown = "unknown"
+)
+
+// ReclaimPort is a free (unused) port that has been idle for a while and is a
+// candidate for reclamation/repurposing. HasTransceiver distinguishes a port
+// that still has an optic installed from a truly empty one.
+type ReclaimPort struct {
+	DataCenter     string    `json:"dataCenter"`
+	Device         string    `json:"device"`
+	Hostname       string    `json:"hostname"`
+	Interface      string    `json:"interface"`
+	HasTransceiver bool      `json:"hasTransceiver"`
+	MediaType      string    `json:"mediaType,omitempty"`
+	SpeedBps       int64     `json:"speedBps"`
+	LastChange     time.Time `json:"lastChange"`
+	IdleDays       float64   `json:"idleDays"`
+}
+
+// TopologyNode is a device in the LLDP-derived topology graph.
+type TopologyNode struct {
+	ID         string `json:"id"` // serial
+	Hostname   string `json:"hostname"`
+	Role       string `json:"role"`
+	Status     string `json:"status"`
+	DataCenter string `json:"dataCenter"`
+}
+
+// TopologyLink is an LLDP adjacency between two managed devices.
+type TopologyLink struct {
+	A     string `json:"a"` // serial
+	B     string `json:"b"` // serial
+	Count int    `json:"count"`
+}
+
+// Flow is a top-talker conversation (sFlow/IPFIX-style).
+type Flow struct {
+	DataCenter string  `json:"dataCenter"`
+	Device     string  `json:"device"`
+	Hostname   string  `json:"hostname"`
+	SrcIP      string  `json:"srcIp"`
+	DstIP      string  `json:"dstIp"`
+	Proto      string  `json:"proto"`
+	Port       int     `json:"port"`
+	App        string  `json:"app"`
+	Bps        float64 `json:"bps"`
+}
+
+// Congestion is a LANZ-style queue-congestion / microburst event.
+type Congestion struct {
+	DataCenter   string    `json:"dataCenter"`
+	Device       string    `json:"device"`
+	Hostname     string    `json:"hostname"`
+	Interface    string    `json:"interface"`
+	QueueDepthKB int       `json:"queueDepthKb"`
+	DurationMs   int       `json:"durationMs"`
+	Drops        int       `json:"drops"`
+	Severity     string    `json:"severity"`
+	Time         time.Time `json:"time"`
 }
 
 // Alert severities.

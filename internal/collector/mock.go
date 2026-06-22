@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/noainred/dvc.cvp/internal/model"
@@ -101,6 +102,18 @@ func NewMock() *Mock {
 			continue // simulate a site we currently cannot reach
 		}
 		m.buildSite(s)
+	}
+	// Assign configuration compliance: most devices compliant, a minority with
+	// drift (often correlated with an older EOS train).
+	for _, d := range m.devices {
+		d.dev.Compliance = model.ComplianceOK
+		drift := 0.10
+		if !strings.Contains(d.dev.Version, "4.31") {
+			drift = 0.35 // older EOS more likely to drift
+		}
+		if m.rnd.Float64() < drift {
+			d.dev.Compliance = model.ComplianceNon
+		}
 	}
 	return m
 }
@@ -213,6 +226,10 @@ func (m *Mock) newPort(name string, speed int64, connected bool, base float64, u
 		} else if neighbor != "" {
 			p.desc = "to " + neighbor
 		}
+	} else {
+		// Unused ports went down a while ago — vary from a week to ~1 year so
+		// the port-reclamation view has meaningful idle times.
+		p.lastChange = time.Now().Add(-time.Duration(24*(7+m.rnd.Intn(360))) * time.Hour)
 	}
 	return p
 }
