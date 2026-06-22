@@ -21,6 +21,8 @@ import (
 	"github.com/noainred/dvc.cvp/internal/config"
 	"github.com/noainred/dvc.cvp/internal/cvp"
 	"github.com/noainred/dvc.cvp/internal/store"
+	"github.com/noainred/dvc.cvp/internal/upgrade"
+	"github.com/noainred/dvc.cvp/internal/version"
 )
 
 func main() {
@@ -46,13 +48,16 @@ func main() {
 	hub := api.NewHub(st)
 	coll.OnUpdate(hub.Broadcast)
 
-	apiH := api.NewAPI(st, cfg.Mode)
+	upMgr := upgrade.New(cfg.Upgrade, version.Get())
+
+	apiH := api.NewAPI(st, cfg.Mode, upMgr)
 	srv := api.NewServer(cfg.Server.Listen, cfg.Server.WebDir, apiH, hub)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	go coll.Run(ctx)
+	go upMgr.Run(ctx)
 
 	go func() {
 		<-ctx.Done()
@@ -61,8 +66,8 @@ func main() {
 		_ = srv.Shutdown(shutCtx)
 	}()
 
-	log.Printf("dvc.cvp listening on %s (mode=%s, poll=%s, sites=%d)",
-		cfg.Server.Listen, cfg.Mode, cfg.Poll.Interval, len(cfg.DataCenters))
+	log.Printf("dvc.cvp %s listening on %s (mode=%s, poll=%s, sites=%d)",
+		version.Version, cfg.Server.Listen, cfg.Mode, cfg.Poll.Interval, len(cfg.DataCenters))
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server: %v", err)
 	}

@@ -5,6 +5,7 @@ import { SummaryCards } from './components/SummaryCards'
 import { DataCenterTable } from './components/DataCenterTable'
 import { DeviceTable } from './components/DeviceTable'
 import { DeviceView } from './views/DeviceView'
+import { VersionBadge } from './components/VersionBadge'
 
 type Route =
   | { view: 'overview' }
@@ -39,6 +40,7 @@ export default function App() {
               갱신 {new Date(live.summary.updatedAt).toLocaleTimeString()}
             </span>
           )}
+          <VersionBadge />
         </div>
       </header>
 

@@ -1,26 +1,34 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/noainred/dvc.cvp/internal/store"
+	"github.com/noainred/dvc.cvp/internal/upgrade"
+	"github.com/noainred/dvc.cvp/internal/version"
 )
 
-// API holds the REST handlers backed by the store.
+// API holds the REST handlers backed by the store and upgrade manager.
 type API struct {
-	store *store.Store
-	mode  string
+	store   *store.Store
+	mode    string
+	upgrade *upgrade.Manager
 }
 
 // NewAPI creates the REST handler set.
-func NewAPI(s *store.Store, mode string) *API {
-	return &API{store: s, mode: mode}
+func NewAPI(s *store.Store, mode string, up *upgrade.Manager) *API {
+	return &API{store: s, mode: mode, upgrade: up}
 }
 
 // Register attaches all REST routes to the mux.
 func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", a.health)
+	mux.HandleFunc("GET /api/version", a.version)
+	mux.HandleFunc("POST /api/upgrade/check", a.upgradeCheck)
+	mux.HandleFunc("POST /api/upgrade", a.upgradeApply)
 	mux.HandleFunc("GET /api/summary", a.summary)
 	mux.HandleFunc("GET /api/datacenters", a.datacenters)
 	mux.HandleFunc("GET /api/datacenters/{id}/devices", a.dcDevices)
@@ -32,7 +40,43 @@ func (a *API) Register(mux *http.ServeMux) {
 }
 
 func (a *API) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "mode": a.mode})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":  "ok",
+		"mode":    a.mode,
+		"version": version.Version,
+	})
+}
+
+// version returns the current build and upgrade availability for the portal.
+func (a *API) version(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, a.upgrade.Status())
+}
+
+// upgradeCheck forces a release check and returns the refreshed status.
+func (a *API) upgradeCheck(w http.ResponseWriter, _ *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	st, err := a.upgrade.Check(ctx)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, st)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+// upgradeApply downloads and installs the newest release, then re-execs. The
+// response is sent before the process restarts.
+func (a *API) upgradeApply(w http.ResponseWriter, _ *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	if err := a.upgrade.Apply(ctx); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"status": "upgrading",
+		"detail": "새 버전을 설치했습니다. 서버가 곧 재시작됩니다.",
+	})
 }
 
 func (a *API) summary(w http.ResponseWriter, _ *http.Request) {

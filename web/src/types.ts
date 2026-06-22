@@ -94,3 +94,18 @@ export interface LivePayload {
   datacenters: DataCenter[]
   devices: Device[]
 }
+
+export interface UpgradeStatus {
+  current: string
+  commit: string
+  buildTime: string
+  latest?: string
+  notes?: string
+  releaseUrl?: string
+  upgradeAvailable: boolean
+  enabled: boolean
+  autoApply: boolean
+  applying: boolean
+  lastChecked?: string
+  error?: string
+}

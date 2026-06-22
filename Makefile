@@ -1,5 +1,13 @@
 .PHONY: all build backend frontend run dev-backend dev-frontend tidy test clean
 
+# Version metadata injected into the binary (shown in the portal).
+VERSION   ?= $(shell git describe --tags 2>/dev/null || echo v0.1.0)
+COMMIT    ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
+BUILDTIME ?= $(shell date -u +%FT%TZ)
+LDFLAGS = -X github.com/noainred/dvc.cvp/internal/version.Version=$(VERSION) \
+          -X github.com/noainred/dvc.cvp/internal/version.Commit=$(COMMIT) \
+          -X github.com/noainred/dvc.cvp/internal/version.BuildTime=$(BUILDTIME)
+
 all: build
 
 ## build: 프론트엔드 + 백엔드 전체 빌드
@@ -9,9 +17,9 @@ build: frontend backend
 frontend:
 	cd web && npm install && npm run build
 
-## backend: Go 서버 바이너리 빌드 -> bin/dvc-cvp
+## backend: Go 서버 바이너리 빌드 -> bin/dvc-cvp (버전 메타데이터 주입)
 backend:
-	go build -o bin/dvc-cvp ./cmd/server
+	go build -ldflags "$(LDFLAGS)" -o bin/dvc-cvp ./cmd/server
 
 ## run: 빌드된 서버 실행 (config/config.yaml 사용, 없으면 demo 모드)
 run: backend

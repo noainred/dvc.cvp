@@ -18,6 +18,7 @@
 - **트래픽 추이 차트** — 장비 전체 및 포트별 인입/인출 시계열 그래프
 - **다중 데이터센터 관제** — 사이트별 상태(정상/저하/연결불가), 프록시 방식, 장비·포트·트래픽 롤업
 - **프록시 연결** — 사이트별 SSH 점프호스트를 통한 터널링(직접 연결 `direct` 도 지원)
+- **버전 표시 & 포탈 자동 업그레이드** — 상단바에 현재 빌드 버전 표시, 신규 릴리스 감지 시 원클릭(또는 자동) 자가 업그레이드
 
 ## 아키텍처
 
@@ -106,6 +107,9 @@ make build
 | `GET /api/devices/{serial}/history` | 장비 전체 트래픽 시계열 |
 | `GET /api/devices/{serial}/interface-history?name=Ethernet1` | 인터페이스 트래픽 시계열 |
 | `GET /api/stream` | **SSE** 실시간 스냅샷 스트림 |
+| `GET /api/version` | 현재 버전 + 업그레이드 가용 여부 |
+| `POST /api/upgrade/check` | 신규 릴리스 즉시 확인 |
+| `POST /api/upgrade` | 신규 버전 설치 후 서버 재시작 |
 
 ## 프로젝트 구조
 
@@ -131,6 +135,15 @@ config/              설정 예시
 | `free` (미사용) | admin up + oper `notconnect` | 패치/가용 대기, 미사용 |
 | `disabled` (비활성) | admin `down` | 관리상 셧다운 |
 | `error` (오류) | oper `errdisabled` | err-disabled 등 오류 상태 |
+
+## 버전 표시 & 자동 업그레이드
+
+- 빌드 버전은 `-ldflags` 로 주입되어(상단바에 `v0.1.0` 형태로 표시) `/api/version` 으로도 조회할 수 있습니다. `make build` 는 `git describe` 태그를 버전으로 사용합니다.
+- 포탈은 설정된 GitHub 릴리스 소스(`upgrade.repo`)에서 신규 버전을 감지하면 상단바에 **업그레이드** 버튼을 노출합니다. 클릭 시 OS/아키텍처에 맞는 릴리스 자산(원시 바이너리 또는 `.tar.gz`)을 내려받아 실행 중인 바이너리를 원자적으로 교체하고 새 바이너리로 **재실행(re-exec)** 합니다.
+- `upgrade.autoApply: true` 로 두면 주기 확인(`checkInterval`) 중 신규 버전 발견 시 자동 적용됩니다.
+- 자가 교체·재실행은 POSIX 의미에 의존하므로 **Linux 서버 배포**를 대상으로 합니다. systemd 등 프로세스 슈퍼바이저 아래에서 운영하면 재실행 실패 시 자동 복구됩니다.
+
+> 릴리스 자산 이름은 `upgrade.assetPattern`(기본 `dvc-cvp_{os}_{arch}`)으로 매칭합니다. 예: `dvc-cvp_linux_amd64.tar.gz`.
 
 ## 빌드/테스트
 

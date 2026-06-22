@@ -16,6 +16,16 @@ poll:
   timeout: 8s # 폴링 1회 타임아웃
   historyPoints: 360 # 인터페이스별 보관 샘플 수 (10s × 360 ≈ 1시간)
 
+# 포탈(앱) 자동 업그레이드. 신규 릴리스를 감지해 서버 바이너리를 자가 교체합니다.
+upgrade:
+  enabled: true # 업그레이드 확인/실행 허용
+  autoApply: false # true 면 신규 버전 발견 시 자동 적용(무중단 재시작)
+  checkInterval: 6h # 주기적 릴리스 확인 간격(0 이면 비활성)
+  repo: "noainred/dvc.cvp" # GitHub 릴리스 소스(owner/repo)
+  assetPattern: "dvc-cvp_{os}_{arch}" # 릴리스 자산 이름 패턴({os}/{arch} 치환)
+  # releaseUrl: "https://.../releases/latest"  # 사내 미러/프라이빗 릴리스 API 사용 시
+  # token: ""                                   # 프라이빗 릴리스 접근 토큰
+
 # 한국 본사에서 관제하는 데이터센터 목록.
 # 각 사이트는 자체 CloudVision Portal 을 가지며, 본사 수집기는 사이트별
 # SSH 점프호스트(bastion)를 통해 CVP/스위치에 접근합니다.

@@ -22,7 +22,22 @@ type Config struct {
 	Server      ServerConfig       `yaml:"server"`
 	Mode        string             `yaml:"mode"`
 	Poll        PollConfig         `yaml:"poll"`
+	Upgrade     UpgradeConfig      `yaml:"upgrade"`
 	DataCenters []DataCenterConfig `yaml:"datacenters"`
+}
+
+// UpgradeConfig controls the portal's self-upgrade feature. The manager checks
+// a GitHub releases endpoint for a newer build and can replace the running
+// binary in place. AutoApply makes the upgrade happen automatically; otherwise
+// availability is reported and the upgrade is triggered from the portal.
+type UpgradeConfig struct {
+	Enabled       bool          `yaml:"enabled"`       // allow checks and the upgrade endpoint
+	AutoApply     bool          `yaml:"autoApply"`     // apply automatically when a newer release is found
+	CheckInterval time.Duration `yaml:"checkInterval"` // periodic check cadence (0 disables)
+	Repo          string        `yaml:"repo"`          // "owner/repo" for GitHub releases
+	ReleaseURL    string        `yaml:"releaseUrl"`    // override the latest-release API URL (mirror/private)
+	AssetPattern  string        `yaml:"assetPattern"`  // asset name pattern, {os}/{arch} expanded
+	Token         string        `yaml:"token"`         // optional token for private release sources
 }
 
 // ServerConfig controls the HTTP listener and where the built frontend lives.
@@ -116,6 +131,15 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Poll.HistoryPoints <= 0 {
 		c.Poll.HistoryPoints = 360
+	}
+	if c.Upgrade.Repo == "" {
+		c.Upgrade.Repo = "noainred/dvc.cvp"
+	}
+	if c.Upgrade.AssetPattern == "" {
+		c.Upgrade.AssetPattern = "dvc-cvp_{os}_{arch}"
+	}
+	if c.Upgrade.CheckInterval == 0 {
+		c.Upgrade.CheckInterval = 6 * time.Hour
 	}
 	for i := range c.DataCenters {
 		if c.DataCenters[i].Proxy.Type == "" {

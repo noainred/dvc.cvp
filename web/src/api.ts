@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Interface, LivePayload, Sample } from './types'
+import type { Interface, LivePayload, Sample, UpgradeStatus } from './types'
 
 export async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url)
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`)
   return (await res.json()) as T
+}
+
+export async function postJSON<T>(url: string): Promise<T> {
+  const res = await fetch(url, { method: 'POST' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error((data && (data as any).error) || `${url}: HTTP ${res.status}`)
+  return data as T
 }
 
 export const api = {
@@ -15,7 +22,10 @@ export const api = {
   interfaceHistory: (serial: string, name: string) =>
     getJSON<Sample[]>(
       `/api/devices/${encodeURIComponent(serial)}/interface-history?name=${encodeURIComponent(name)}`
-    )
+    ),
+  version: () => getJSON<UpgradeStatus>('/api/version'),
+  checkUpgrade: () => postJSON<UpgradeStatus>('/api/upgrade/check'),
+  applyUpgrade: () => postJSON<{ status: string; detail: string }>('/api/upgrade')
 }
 
 // useLive subscribes to the SSE stream and returns the latest fleet snapshot
