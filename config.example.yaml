@@ -1,0 +1,131 @@
+# ============================================================================
+#  HomeLab Monitor - 설정 예시
+#  이 파일을 config.yaml 로 복사한 뒤 환경에 맞게 수정하세요.
+#    cp config.example.yaml config.yaml
+#
+#  여기 있는 값은 "부팅 기본값" 입니다. 대부분의 항목은 실행 후 웹 UI의
+#  [설정] 탭에서 다시 바꿀 수 있으며, 변경 사항은 DB에 저장됩니다.
+# ============================================================================
+
+# --- 시스템 설정 (변경 시 재시작 필요) ---
+server:
+  host: "0.0.0.0"      # 모든 인터페이스에서 접속 허용 (라즈베리파이 IP로 접속)
+  port: 8080
+
+database:
+  # SQLite 파일 경로 (절대경로 권장). 디렉터리는 자동 생성됩니다.
+  path: "./data/homelab.db"
+
+log_level: "INFO"
+
+# --- 런타임 기본값 (웹 [설정] 탭에서 수정 가능) ---
+monitoring:
+  # 모든 장비를 핑 체크하는 주기 (초)
+  interval_seconds: 60
+  # 한 번에 동시에 검사할 장비 수
+  concurrency: 16
+  # 핑 타임아웃 (초)
+  timeout_seconds: 2
+
+retention:
+  # 원본(1분 단위) 체크 기록 보관 일수
+  raw_days: 90
+  # 시간별 집계 보관 일수 (장기 그래프용)
+  hourly_days: 400
+  # 일별 집계는 영구 보관됩니다 (3년 이상 조회 가능).
+  # 장비 UP/DOWN 전환 이벤트 로그도 영구 보관됩니다.
+
+speedtest:
+  enabled: true
+  # 자동 실행 주기 (분). 0 이면 자동 실행 끔 (수동 실행만).
+  interval_minutes: 360       # 6시간마다
+  # "auto" | "python" | "ookla"
+  #   auto   : Ookla 바이너리가 있으면 사용, 없으면 python 라이브러리
+  #   python : speedtest-cli 파이썬 라이브러리 사용
+  #   ookla  : 공식 `speedtest` 바이너리 사용
+  method: "auto"
+
+# --- 자동 업그레이드 (선택) ---
+update:
+  auto_check: true            # 주기적으로 새 버전 확인
+  check_interval_minutes: 1   # 확인 주기 (분), 기본 1분
+  auto_apply: false           # true 면 새 버전 발견 시 자동으로 설치+재시작
+  allow_manual: true          # 웹에서 "지금 업그레이드" 버튼 허용
+
+# --- IP 스캔 ---
+scan:
+  enabled: true
+  subnet: ""                  # 비우면 라즈베리파이의 로컬 /24 자동 감지 (예: "192.168.0.0/24")
+  interval_minutes: 10        # 10분마다 자동 스캔
+  method: "icmp"              # icmp | tcp | http
+  timeout_seconds: 1
+  concurrency: 64
+
+# --- 보안 / 로그인 (Google OTP) ---
+security:
+  auth_enabled: false         # 로그인 요구 (켜기 전 웹 [보안]에서 계정을 먼저 등록·인증)
+  max_attempts: 3             # 이 횟수 이상 실패 시 IP 차단
+  ban_minutes: 15             # 차단 시간(분), 0=영구
+  window_minutes: 10          # 실패 횟수 집계 시간 창
+
+# --- OS fail2ban (선택, SSH 등) ---
+fail2ban:
+  enabled: false
+  jail: "sshd"
+  maxretry: 3
+  bantime_minutes: 15
+  findtime_minutes: 10
+
+# --- 어디서나 접속 (Tailscale) ---
+tailscale:
+  enabled: true               # 탭 표시 여부 (상태는 자동 감지)
+
+# --- OpenVPN 서버 (선택) ---
+openvpn:
+  port: 1194
+  status_log: "/var/log/openvpn/status.log"     # 접속 클라이언트 모니터링용
+  ovpn_dirs: ["~", "/root", "/etc/openvpn"]      # .ovpn 프로필 검색 위치
+
+# --- 시놀로지 ---
+synology:
+  poll_seconds: 300           # 전체 NAS 상태 폴링 주기
+
+# 여러 대의 NAS를 첫 실행 시 등록 (이후 웹 [시놀로지]에서 관리)
+# 2단계 인증(OTP) 계정은 등록 후 웹에서 OTP 코드를 1회 입력하면 신뢰기기로 등록됩니다.
+synology_nas: []
+#  - name: "거실 NAS"
+#    host: "192.168.0.10"
+#    port: 5001
+#    https: true
+#    verify_ssl: false
+#    username: "monitor"
+#    password: ""
+
+# --- 공유기 (선택) ---
+router:
+  enabled: false
+  host: "192.168.0.1"
+  admin_url: "http://192.168.0.1"   # 관리 페이지 바로가기
+  # SNMP 가 켜진 공유기면 트래픽/업타임 조회 가능 (pysnmp 필요)
+  snmp_enabled: false
+  snmp_community: "public"
+  snmp_port: 161
+  # WAN 인터페이스 ifIndex (트래픽 측정용). 모르면 비워두세요.
+  wan_if_index: null
+
+# --- 초기 등록 장비 (선택) ---
+# 여기 적어두면 첫 실행 시 DB에 자동 등록됩니다. 이후에는 웹 UI에서 관리하세요.
+devices:
+  - name: "공유기"
+    host: "192.168.0.1"
+    type: "router"
+    check_method: "icmp"      # icmp | tcp | http
+  - name: "시놀로지 NAS"
+    host: "192.168.0.10"
+    type: "nas"
+    check_method: "tcp"
+    check_port: 5001
+  - name: "라즈베리파이"
+    host: "127.0.0.1"
+    type: "server"
+    check_method: "icmp"

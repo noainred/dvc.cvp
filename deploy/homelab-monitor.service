@@ -1,0 +1,22 @@
+[Unit]
+Description=HomeLab Monitor (uptime / IP / Synology / router / speedtest)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 설치 위치에 맞게 수정하세요.
+User=pi
+WorkingDirectory=/home/pi/homelab-monitor
+ExecStart=/home/pi/homelab-monitor/.venv/bin/python run.py
+# 자동 업그레이드 후 깔끔히 재시작되도록 always 사용
+Restart=always
+RestartSec=5
+# 선택: 설정 파일 경로 지정
+# Environment=HOMELAB_CONFIG=/home/pi/homelab-monitor/config.yaml
+# 선택: 자동 업그레이드 시 재시작 명령을 systemd 로 위임하려면 아래 사용
+#  (sudoers 에 NOPASSWD 로 systemctl restart 허용 필요)
+# Environment=HOMELAB_RESTART_CMD=sudo systemctl restart homelab-monitor
+
+[Install]
+WantedBy=multi-user.target

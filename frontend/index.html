@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HomeLab Monitor</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- 차트 스크롤/줌(패닝)용 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+</head>
+<body>
+  <!-- 로그인 오버레이 -->
+  <div class="login-overlay" id="loginOverlay" hidden>
+    <div class="login-box">
+      <div class="login-logo">🏠 HomeLab Monitor</div>
+      <p class="muted">Google OTP(Authenticator) 코드로 로그인하세요.</p>
+      <form id="loginForm">
+        <input name="username" placeholder="사용자 이름" autocomplete="username" required />
+        <input name="code" placeholder="6자리 OTP 코드" inputmode="numeric" autocomplete="one-time-code" required />
+        <button type="submit" class="btn primary">로그인</button>
+      </form>
+      <div id="loginMsg" class="login-msg"></div>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🏠</span>
+      <span>HomeLab Monitor</span>
+      <span class="version" id="appVersion" title="버전"></span>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="dashboard">대시보드</button>
+      <button class="tab" data-tab="status">장비 상태</button>
+      <button class="tab" data-tab="scan">IP 스캔</button>
+      <button class="tab" data-tab="speed">인터넷 속도</button>
+      <button class="tab" data-tab="synology">시놀로지</button>
+      <button class="tab" data-tab="routerinfo">공유기</button>
+      <button class="tab" data-tab="tailscale">원격접속</button>
+      <button class="tab" data-tab="vpn">VPN</button>
+      <button class="tab" data-tab="devices">장비 관리</button>
+      <button class="tab" data-tab="security">보안</button>
+      <button class="tab" data-tab="settings">설정</button>
+    </nav>
+    <div class="topright">
+      <span class="status-pill" id="globalStatus">연결 중…</span>
+      <button class="btn small" id="logoutBtn" hidden>로그아웃</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 대시보드 -->
+    <section id="dashboard" class="page active">
+      <div class="cards" id="summaryCards"></div>
+      <h2>장비 현황</h2>
+      <div class="grid" id="deviceCards"></div>
+      <h2>최근 이벤트</h2>
+      <table class="data-table" id="eventsTable">
+        <thead><tr><th>시간</th><th>장비</th><th>상태</th><th>지속</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- 장비 상태 (표 + IP 클릭 상세) -->
+    <section id="status" class="page">
+      <h2>모든 장비 IP 사용 현황</h2>
+      <p class="muted">정해진 주기마다 자동 점검되어 live 상태가 기록됩니다. IP를 클릭하면 분/시간/날짜 단위 업타임을 볼 수 있습니다.</p>
+      <table class="data-table" id="statusTable">
+        <thead><tr>
+          <th>상태</th><th>이름</th><th>IP</th><th>종류</th><th>지연</th><th>마지막 점검</th><th>24h 가동률</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <div id="uptimeDetail" hidden>
+        <h2 id="detailTitle">업타임 상세</h2>
+        <div class="toolbar">
+          <div class="rangebtns" id="granBtns">
+            <button data-gran="minute" class="active">분</button>
+            <button data-gran="hour">시간</button>
+            <button data-gran="day">날짜</button>
+          </div>
+          <div class="rangebtns" id="granRanges"></div>
+        </div>
+        <div class="cards" id="detailStats"></div>
+        <div class="chart-box"><canvas id="uptimeChart"></canvas></div>
+        <div class="chart-box"><canvas id="latencyChart"></canvas></div>
+        <h2>상태 변경 이력</h2>
+        <table class="data-table" id="detailEvents">
+          <thead><tr><th>시간</th><th>상태</th><th>이전 상태 지속</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- IP 스캔 -->
+    <section id="scan" class="page">
+      <div class="toolbar">
+        <button class="btn primary" id="runScan">▶ 지금 스캔</button>
+        <span id="scanInfo" class="muted"></span>
+      </div>
+      <table class="data-table" id="scanTable">
+        <thead><tr>
+          <th>상태</th><th>IP</th><th>MAC</th><th>호스트명</th><th>최초 발견</th><th>마지막 발견</th><th>횟수</th><th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- 인터넷 속도 -->
+    <section id="speed" class="page">
+      <div class="toolbar">
+        <button class="btn primary" id="runSpeed">▶ 지금 측정</button>
+        <span id="speedMsg" class="muted"></span>
+        <div class="rangebtns" id="speedRanges">
+          <button data-days="7">7일</button>
+          <button data-days="30" class="active">30일</button>
+          <button data-days="365">1년</button>
+          <button data-days="1095">3년</button>
+        </div>
+      </div>
+      <div class="cards" id="speedStats"></div>
+      <div class="chart-box"><canvas id="speedChart"></canvas></div>
+      <div class="chart-box"><canvas id="pingChart"></canvas></div>
+    </section>
+
+    <!-- 시놀로지 (다중 NAS) -->
+    <section id="synology" class="page">
+      <div class="toolbar"><button class="btn primary" id="addNas">+ NAS 추가</button></div>
+      <div class="grid" id="nasCards"></div>
+    </section>
+
+    <!-- 공유기 -->
+    <section id="routerinfo" class="page">
+      <div class="toolbar"><button class="btn" id="refreshRouter">새로고침</button></div>
+      <div id="routerBody"><p class="muted">불러오는 중…</p></div>
+    </section>
+
+    <!-- 원격접속 (Tailscale) -->
+    <section id="tailscale" class="page">
+      <div class="toolbar">
+        <button class="btn" id="refreshTs">새로고침</button>
+        <button class="btn primary" id="tsConnect" hidden>연결(tailscale up)</button>
+      </div>
+      <div id="tsBody"><p class="muted">불러오는 중…</p></div>
+    </section>
+
+    <!-- VPN (OpenVPN) -->
+    <section id="vpn" class="page">
+      <div class="toolbar"><button class="btn" id="refreshVpn">새로고침</button></div>
+      <div id="vpnBody"><p class="muted">불러오는 중…</p></div>
+      <pre id="vpnLog" class="upgrade-log" hidden></pre>
+    </section>
+
+    <!-- 장비 관리 -->
+    <section id="devices" class="page">
+      <div class="toolbar"><button class="btn primary" id="addDevice">+ 장비 추가</button></div>
+      <table class="data-table" id="deviceTable">
+        <thead><tr>
+          <th>이름</th><th>호스트/IP</th><th>종류</th><th>체크</th><th>상태</th><th>지연</th><th>사용</th><th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- 보안 -->
+    <section id="security" class="page">
+      <div class="settings-group">
+        <h3>로그인 (Google OTP)</h3>
+        <div class="settings-row">
+          <label>로그인 요구 (활성화 전 계정을 먼저 등록·인증하세요)</label>
+          <input type="checkbox" id="authEnabled" />
+        </div>
+        <div class="toolbar" style="margin:6px 0 0"><button class="btn primary" id="addUser">+ 계정 추가</button></div>
+        <table class="data-table" id="userTable" style="margin-top:10px">
+          <thead><tr><th>사용자</th><th>상태</th><th>마지막 로그인</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="settings-group">
+        <h3>로그인 실패 IP 차단 정책</h3>
+        <div class="settings-row"><label>차단 임계값 (실패 횟수)</label><input type="number" id="secMax" /></div>
+        <div class="settings-row"><label>차단 시간 (분, 0=영구)</label><input type="number" id="secBan" /></div>
+        <div class="settings-row"><label>실패 집계 시간 창 (분)</label><input type="number" id="secWindow" /></div>
+        <div class="toolbar" style="margin:4px 0 0">
+          <button class="btn primary" id="saveSecPolicy">정책 저장</button>
+          <span id="secMsg" class="muted"></span>
+        </div>
+        <h3 style="margin-top:16px">차단된 IP</h3>
+        <div class="toolbar">
+          <input id="banIp" placeholder="수동 차단할 IP" style="width:160px" />
+          <button class="btn" id="addBan">차단 추가</button>
+        </div>
+        <table class="data-table" id="banTable">
+          <thead><tr><th>IP</th><th>사유</th><th>출처</th><th>만료</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="settings-group">
+        <h3>OS 방화벽 (fail2ban) — SSH 등</h3>
+        <div id="f2bStatus" class="muted">불러오는 중…</div>
+        <div class="settings-row"><label>fail2ban 사용</label><input type="checkbox" id="f2bEnabled" /></div>
+        <div class="settings-row"><label>jail 이름</label><input id="f2bJail" style="width:160px" /></div>
+        <div class="settings-row"><label>최대 시도(maxretry)</label><input type="number" id="f2bMax" /></div>
+        <div class="settings-row"><label>차단 시간(분)</label><input type="number" id="f2bBan" /></div>
+        <div class="settings-row"><label>집계 창(분)</label><input type="number" id="f2bFind" /></div>
+        <div class="toolbar" style="margin:4px 0 0">
+          <button class="btn primary" id="saveF2b">정책 적용</button>
+          <span id="f2bMsg" class="muted"></span>
+        </div>
+        <pre id="f2bOut" class="upgrade-log" hidden></pre>
+      </div>
+    </section>
+
+    <!-- 설정 -->
+    <section id="settings" class="page">
+      <div class="settings-group" id="updatePanel">
+        <h3>버전 / 자동 업그레이드</h3>
+        <div class="settings-row"><label>현재 버전</label><span id="curVersion" class="muted">—</span></div>
+        <div class="settings-row"><label>업데이트 상태</label><span id="updateState" class="muted">—</span></div>
+        <div class="toolbar" style="margin:8px 0 0">
+          <button class="btn" id="checkUpdate">업데이트 확인</button>
+          <button class="btn primary" id="doUpgrade">지금 업그레이드</button>
+        </div>
+        <pre id="upgradeLog" class="upgrade-log" hidden></pre>
+      </div>
+      <form id="settingsForm" class="settings-form"></form>
+      <div class="toolbar">
+        <button class="btn primary" id="saveSettings">저장</button>
+        <span id="settingsMsg" class="muted"></span>
+      </div>
+    </section>
+  </main>
+
+  <!-- 장비 추가/수정 모달 -->
+  <div class="modal-backdrop" id="deviceModal">
+    <div class="modal">
+      <h3 id="deviceModalTitle">장비 추가</h3>
+      <form id="deviceForm">
+        <input type="hidden" name="id" />
+        <label>이름<input name="name" required /></label>
+        <label>호스트 / IP<input name="host" required placeholder="192.168.0.1" /></label>
+        <label>종류
+          <select name="type">
+            <option value="router">공유기</option><option value="nas">NAS</option>
+            <option value="server">서버</option><option value="pc">PC</option>
+            <option value="ap">AP</option><option value="printer">프린터</option>
+            <option value="iot">IoT</option><option value="other">기타</option>
+          </select>
+        </label>
+        <label>체크 방식
+          <select name="check_method">
+            <option value="icmp">ICMP (핑)</option><option value="tcp">TCP 포트</option><option value="http">HTTP</option>
+          </select>
+        </label>
+        <label>포트<input name="check_port" type="number" placeholder="TCP/HTTP 사용 시" /></label>
+        <label>메모<input name="note" /></label>
+        <label class="check-row"><input type="checkbox" name="enabled" checked /> 모니터링 사용</label>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="cancelDevice">취소</button>
+          <button type="submit" class="btn primary">저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- NAS 추가/수정 모달 -->
+  <div class="modal-backdrop" id="nasModal">
+    <div class="modal">
+      <h3 id="nasModalTitle">NAS 추가</h3>
+      <form id="nasForm">
+        <input type="hidden" name="id" />
+        <label>이름<input name="name" required placeholder="거실 NAS" /></label>
+        <label>호스트 / IP<input name="host" required placeholder="192.168.0.10" /></label>
+        <label>포트<input name="port" type="number" value="5001" /></label>
+        <label class="check-row"><input type="checkbox" name="https" checked /> HTTPS</label>
+        <label class="check-row"><input type="checkbox" name="verify_ssl" /> SSL 인증서 검증</label>
+        <label>계정<input name="username" /></label>
+        <label>비밀번호<input name="password" type="password" /></label>
+        <label>OTP 코드 (2단계 인증 시 1회 입력)<input name="otp_code" inputmode="numeric" placeholder="6자리" /></label>
+        <label class="check-row"><input type="checkbox" name="enabled" checked /> 사용</label>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="cancelNas">취소</button>
+          <button type="submit" class="btn primary">저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 계정 추가(QR) 모달 -->
+  <div class="modal-backdrop" id="userModal">
+    <div class="modal">
+      <h3>계정 추가 (Google OTP)</h3>
+      <div id="userStep1">
+        <label>사용자 이름<input id="newUsername" placeholder="admin" /></label>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="cancelUser">취소</button>
+          <button type="button" class="btn primary" id="createUser">QR 생성</button>
+        </div>
+      </div>
+      <div id="userStep2" hidden>
+        <p class="muted">Google Authenticator 앱으로 아래 QR을 스캔한 뒤, 표시되는 6자리 코드를 입력해 인증하세요.</p>
+        <div id="qrBox" class="qr-box"></div>
+        <p class="muted">수동 입력 키: <code id="secretText"></code></p>
+        <label>OTP 코드<input id="verifyCode" inputmode="numeric" placeholder="6자리" /></label>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="cancelUser2">취소</button>
+          <button type="button" class="btn primary" id="verifyUser">인증 완료</button>
+        </div>
+        <div id="userMsg" class="login-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IP(스캔 호스트) 상세 팝업 -->
+  <div class="modal-backdrop" id="hostModal">
+    <div class="modal" style="width:480px; max-width:94vw; max-height:85vh; overflow:auto">
+      <h3 id="hostModalTitle">IP 상세</h3>
+      <div id="hostModalBody"></div>
+      <div class="modal-actions"><button type="button" class="btn" id="closeHost">닫기</button></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
