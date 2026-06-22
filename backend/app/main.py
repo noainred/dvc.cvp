@@ -130,6 +130,7 @@ app = FastAPI(title="HomeLab Monitor", version=__version__, lifespan=lifespan)
 # Routers
 from .api import auth as auth_api  # noqa: E402
 from .api import devices as devices_api  # noqa: E402
+from .api import openvpn as openvpn_api  # noqa: E402
 from .api import router as router_api  # noqa: E402
 from .api import scan as scan_api  # noqa: E402
 from .api import security as security_api  # noqa: E402
@@ -141,7 +142,7 @@ from .api import tailscale as tailscale_api  # noqa: E402
 
 for r in (
     devices_api, speedtest_api, synology_api, router_api, settings_api,
-    system_api, scan_api, tailscale_api, auth_api, security_api,
+    system_api, scan_api, tailscale_api, auth_api, security_api, openvpn_api,
 ):
     app.include_router(r.router)
 

@@ -458,6 +458,65 @@ $("#tsConnect").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// VPN (OpenVPN)
+// ---------------------------------------------------------------------------
+async function loadVpn() {
+  const body = $("#vpnBody");
+  try {
+    const v = await api("/api/openvpn/status");
+    if (!v.installed) {
+      body.innerHTML = `<p class="muted">OpenVPN 서버가 설치되어 있지 않습니다.</p>
+        <p>라즈베리파이 터미널에서 설치하세요(권장 — 설치는 root 상호작용이 필요):</p>
+        <pre class="upgrade-log">sudo bash deploy/openvpn-setup.sh install</pre>
+        <p class="muted">설치 후 [새로고침]을 누르면 상태·클라이언트·프로필이 표시됩니다.</p>`;
+      return;
+    }
+    const clients = (v.clients || []).map((c) => `<tr><td>${c.name}</td><td>${c.address || "—"}</td><td>${c.since || ""}</td></tr>`).join("")
+      || '<tr><td colspan="3" class="muted">접속 중인 클라이언트 없음</td></tr>';
+    const profiles = (v.profiles || []).map((p) => `<tr><td>${p.name}</td><td>${(p.size / 1024).toFixed(1)} KB</td>
+      <td style="white-space:nowrap"><a class="btn small" href="/api/openvpn/profiles/${encodeURIComponent(p.name)}/download">.ovpn 다운로드</a>
+      <button class="btn small danger" data-revoke="${p.name}">폐기</button></td></tr>`).join("")
+      || '<tr><td colspan="3" class="muted">프로필 없음</td></tr>';
+    body.innerHTML = `
+      <div class="kv">
+        <div class="item"><div class="k">상태</div><div class="v"><span class="badge ${v.running ? "up" : "down"}">${v.running ? "실행중" : "중지"}</span></div></div>
+        <div class="item"><div class="k">포트</div><div class="v">${v.port}</div></div>
+        <div class="item"><div class="k">서비스</div><div class="v" style="font-size:13px">${v.service || "—"}</div></div>
+      </div>
+      <div class="toolbar" style="margin-top:14px">
+        <input id="vpnClientName" placeholder="새 클라이언트 이름 (영문/숫자)" style="width:220px" />
+        <button class="btn primary" id="vpnAdd">클라이언트 추가</button>
+      </div>
+      <h2>접속 중인 클라이언트</h2>
+      <table class="data-table"><thead><tr><th>이름</th><th>주소</th><th>접속 시각</th></tr></thead><tbody>${clients}</tbody></table>
+      <h2>클라이언트 프로필 (.ovpn)</h2>
+      <table class="data-table"><thead><tr><th>이름</th><th>크기</th><th></th></tr></thead><tbody>${profiles}</tbody></table>`;
+    $("#vpnAdd").addEventListener("click", () => vpnAction("add", $("#vpnClientName").value.trim()));
+    $$('#vpn [data-revoke]').forEach((b) => b.addEventListener("click", () => { if (confirm(`${b.dataset.revoke} 클라이언트를 폐기할까요?`)) vpnAction("revoke", b.dataset.revoke); }));
+  } catch (err) { body.innerHTML = `<p class="muted">오류: ${err.message}</p>`; }
+}
+loaders.vpn = loadVpn;
+$("#refreshVpn").addEventListener("click", loadVpn);
+
+async function vpnAction(cmd, name) {
+  if (!name) { alert("클라이언트 이름을 입력하세요"); return; }
+  const logEl = $("#vpnLog"); logEl.hidden = false; logEl.textContent = "실행 중… (sudo 권한 필요)";
+  try {
+    let res;
+    if (cmd === "add") res = await api("/api/openvpn/clients", { method: "POST", body: JSON.stringify({ name }) });
+    else res = await api(`/api/openvpn/clients/${encodeURIComponent(name)}/revoke`, { method: "POST" });
+    if (res.status === "error") { logEl.textContent = "오류: " + (res.error || ""); return; }
+    let n = 0;
+    const t = setInterval(async () => {
+      n++;
+      const a = await api("/api/openvpn/action");
+      logEl.textContent = a.log || "실행 중…";
+      if (a.status !== "running" || n > 90) { clearInterval(t); loadVpn(); }
+    }, 2000);
+  } catch (err) { logEl.textContent = "오류: " + err.message; }
+}
+
+// ---------------------------------------------------------------------------
 // 장비 관리 (CRUD)
 // ---------------------------------------------------------------------------
 async function loadDevices() {

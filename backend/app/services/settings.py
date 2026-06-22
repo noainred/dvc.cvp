@@ -28,6 +28,7 @@ _SEED_MAP = {
     "tailscale": "tailscale",
     "security": "security",
     "fail2ban": "fail2ban",
+    "openvpn": "openvpn",
 }
 
 

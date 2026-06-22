@@ -80,6 +80,12 @@ fail2ban:
 tailscale:
   enabled: true               # 탭 표시 여부 (상태는 자동 감지)
 
+# --- OpenVPN 서버 (선택) ---
+openvpn:
+  port: 1194
+  status_log: "/var/log/openvpn/status.log"     # 접속 클라이언트 모니터링용
+  ovpn_dirs: ["~", "/root", "/etc/openvpn"]      # .ovpn 프로필 검색 위치
+
 # --- 시놀로지 ---
 synology:
   poll_seconds: 300           # 전체 NAS 상태 폴링 주기

@@ -58,6 +58,11 @@ DEFAULTS: Dict[str, Any] = {
     # Initial NAS units to seed on first run (afterwards managed in the web UI).
     "synology_nas": [],
     "tailscale": {"enabled": True},
+    "openvpn": {
+        "port": 1194,
+        "status_log": "/var/log/openvpn/status.log",
+        "ovpn_dirs": ["~", "/root", "/etc/openvpn"],
+    },
     "router": {
         "enabled": False,
         "host": "",

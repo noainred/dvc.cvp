@@ -46,6 +46,7 @@ echo
 echo
 echo "선택 기능:"
 echo "  - 어디서나 접속(Tailscale):  curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up"
+echo "  - OpenVPN 서버 설치:         sudo bash deploy/openvpn-setup.sh install"
 echo "  - OS 로그인 차단(fail2ban):  sudo apt-get install -y fail2ban"
 echo "  - 공유기 SNMP / 빠른 ICMP:   pip install pysnmp-lextudio icmplib"
 echo

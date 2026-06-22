@@ -194,6 +194,26 @@ sudo tailscale up
 [원격접속] 탭에서 연결 상태와 **어디서나 접속 주소**(`http://100.x.y.z:8080`,
 MagicDNS 이름)를 확인할 수 있습니다.
 
+## 🔒 OpenVPN 서버
+
+검증된 설치기(angristan/openvpn-install)를 래핑합니다. 설치는 root 상호작용이
+필요하므로 터미널에서 1회 실행하세요:
+
+```bash
+sudo bash deploy/openvpn-setup.sh install        # 서버 설치(기본값 자동)
+```
+
+이후 웹 **[VPN] 탭**에서 서버 상태·접속 클라이언트·`.ovpn` 프로필 다운로드를
+보고, 클라이언트 추가/폐기를 할 수 있습니다. 웹에서 추가/폐기 버튼을 쓰려면
+해당 스크립트에 passwordless sudo 를 허용하세요(`sudo visudo`):
+
+```
+pi ALL=(root) NOPASSWD: /bin/bash /home/pi/homelab-monitor/deploy/openvpn-setup.sh
+```
+
+> 터미널로도 가능: `sudo bash deploy/openvpn-setup.sh add <이름>` /
+> `... revoke <이름>`. 생성된 `.ovpn` 파일을 클라이언트 기기에 넣어 접속합니다.
+
 ## 🗄️ 시놀로지 2단계 인증(OTP)
 
 NAS 계정에 2단계 인증이 켜져 있으면 일반 로그인이 거부됩니다(코드 403). [시놀로지] 탭에서

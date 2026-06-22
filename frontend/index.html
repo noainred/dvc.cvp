@@ -39,6 +39,7 @@
       <button class="tab" data-tab="synology">시놀로지</button>
       <button class="tab" data-tab="routerinfo">공유기</button>
       <button class="tab" data-tab="tailscale">원격접속</button>
+      <button class="tab" data-tab="vpn">VPN</button>
       <button class="tab" data-tab="devices">장비 관리</button>
       <button class="tab" data-tab="security">보안</button>
       <button class="tab" data-tab="settings">설정</button>
@@ -144,6 +145,13 @@
         <button class="btn primary" id="tsConnect" hidden>연결(tailscale up)</button>
       </div>
       <div id="tsBody"><p class="muted">불러오는 중…</p></div>
+    </section>
+
+    <!-- VPN (OpenVPN) -->
+    <section id="vpn" class="page">
+      <div class="toolbar"><button class="btn" id="refreshVpn">새로고침</button></div>
+      <div id="vpnBody"><p class="muted">불러오는 중…</p></div>
+      <pre id="vpnLog" class="upgrade-log" hidden></pre>
     </section>
 
     <!-- 장비 관리 -->
