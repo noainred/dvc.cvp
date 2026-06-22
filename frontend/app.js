@@ -562,7 +562,7 @@ const SETTINGS_SCHEMA = [
     { key: "wan_if_index", label: "WAN ifIndex", type: "number" }] },
   { group: "update", title: "자동 업그레이드", fields: [
     { key: "auto_check", label: "자동 업데이트 확인", type: "checkbox" },
-    { key: "check_interval_hours", label: "확인 주기 (시간)", type: "number" },
+    { key: "check_interval_minutes", label: "확인 주기 (분)", type: "number" },
     { key: "auto_apply", label: "새 버전 자동 설치+재시작", type: "checkbox" },
     { key: "allow_manual", label: "수동 업그레이드 허용", type: "checkbox" }] },
 ];

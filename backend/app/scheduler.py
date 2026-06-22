@@ -199,11 +199,11 @@ def job_reconcile() -> None:
         _current_intervals["speedtest"] = speed_mins
         log.info("Rescheduled speedtest job to every %d min", speed_mins)
 
-    upd_hours = max(1, int(upd.get("check_interval_hours", 24)))
-    if _current_intervals.get("update") != upd_hours:
-        scheduler.reschedule_job("autoupgrade", trigger="interval", hours=upd_hours)
-        _current_intervals["update"] = upd_hours
-        log.info("Rescheduled auto-update check to every %dh", upd_hours)
+    upd_mins = max(1, int(upd.get("check_interval_minutes", 1)))
+    if _current_intervals.get("update") != upd_mins:
+        scheduler.reschedule_job("autoupgrade", trigger="interval", minutes=upd_mins)
+        _current_intervals["update"] = upd_mins
+        log.info("Rescheduled auto-update check to every %dmin", upd_mins)
 
     scan_mins = max(1, int(scn.get("interval_minutes", 10)))
     if _current_intervals.get("scan") != scan_mins:
@@ -236,7 +236,7 @@ def start() -> None:
     monitor_secs = max(10, int(mon.get("interval_seconds", 60)))
     speed_mins = int(spd.get("interval_minutes", 360))
     syn_secs = int(syn.get("poll_seconds", 300))
-    upd_hours = max(1, int(upd.get("check_interval_hours", 24)))
+    upd_mins = max(1, int(upd.get("check_interval_minutes", 1)))
     scan_mins = max(1, int(scn.get("interval_minutes", 10)))
 
     scheduler.add_job(job_monitor, "interval", seconds=monitor_secs, id="monitor",
@@ -250,9 +250,9 @@ def start() -> None:
     scheduler.add_job(job_rollup, "interval", minutes=10, id="rollup",
                       max_instances=1, coalesce=True)
     scheduler.add_job(job_prune, "cron", hour=4, minute=15, id="prune", max_instances=1)
-    scheduler.add_job(job_auto_upgrade, "interval", hours=upd_hours, id="autoupgrade",
+    scheduler.add_job(job_auto_upgrade, "interval", minutes=upd_mins, id="autoupgrade",
                       max_instances=1, coalesce=True,
-                      next_run_time=dt.datetime.utcnow() + dt.timedelta(minutes=2))
+                      next_run_time=dt.datetime.utcnow() + dt.timedelta(minutes=1))
     scheduler.add_job(job_ip_scan, "interval", minutes=scan_mins, id="ipscan",
                       max_instances=1, coalesce=True,
                       next_run_time=dt.datetime.utcnow() + dt.timedelta(seconds=20))
@@ -265,7 +265,7 @@ def start() -> None:
         scheduler.pause_job("ipscan")
 
     _current_intervals.update(
-        {"monitor": monitor_secs, "speedtest": speed_mins, "update": upd_hours, "scan": scan_mins}
+        {"monitor": monitor_secs, "speedtest": speed_mins, "update": upd_mins, "scan": scan_mins}
     )
     scheduler.start()
     log.info("Scheduler started (monitor=%ds, speedtest=%dmin, scan=%dmin)", monitor_secs, speed_mins, scan_mins)

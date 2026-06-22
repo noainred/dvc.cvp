@@ -35,7 +35,7 @@ DEFAULTS: Dict[str, Any] = {
     },
     "update": {
         "auto_check": True,
-        "check_interval_hours": 24,
+        "check_interval_minutes": 1,
         "auto_apply": False,
         "allow_manual": True,
     },
