@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Interface, LivePayload, Sample, UpgradeStatus } from './types'
+import type {
+  DeviceTrendResponse,
+  Interface,
+  LivePayload,
+  Sample,
+  TrendResponse,
+  UpgradeStatus
+} from './types'
 
 export async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url)
@@ -25,7 +32,10 @@ export const api = {
     ),
   version: () => getJSON<UpgradeStatus>('/api/version'),
   checkUpgrade: () => postJSON<UpgradeStatus>('/api/upgrade/check'),
-  applyUpgrade: () => postJSON<{ status: string; detail: string }>('/api/upgrade')
+  applyUpgrade: () => postJSON<{ status: string; detail: string }>('/api/upgrade'),
+  trend: (days = 30) => getJSON<TrendResponse>(`/api/trend?days=${days}`),
+  deviceTrend: (serial: string, days = 30) =>
+    getJSON<DeviceTrendResponse>(`/api/devices/${encodeURIComponent(serial)}/trend?days=${days}`)
 }
 
 // useLive subscribes to the SSE stream and returns the latest fleet snapshot

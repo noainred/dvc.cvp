@@ -24,7 +24,16 @@ type Config struct {
 	Poll        PollConfig         `yaml:"poll"`
 	Upgrade     UpgradeConfig      `yaml:"upgrade"`
 	Alert       AlertConfig        `yaml:"alert"`
+	History     HistoryConfig      `yaml:"history"`
 	DataCenters []DataCenterConfig `yaml:"datacenters"`
+}
+
+// HistoryConfig controls long-term persistence of throughput/port-usage series
+// (for trend and capacity projection). Samples are written once per minute.
+type HistoryConfig struct {
+	Enabled   bool          `yaml:"enabled"`
+	Path      string        `yaml:"path"`
+	Retention time.Duration `yaml:"retention"`
 }
 
 // AlertConfig controls threshold alerting and optional webhook notifications.
@@ -107,6 +116,7 @@ type ProxyConfig struct {
 func Default() *Config {
 	c := &Config{}
 	c.Alert.Enabled = true
+	c.History.Enabled = true
 	c.applyDefaults()
 	return c
 }
@@ -164,6 +174,12 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Alert.ErrorsPerInterval == 0 {
 		c.Alert.ErrorsPerInterval = 100
+	}
+	if c.History.Path == "" {
+		c.History.Path = "data/history.db"
+	}
+	if c.History.Retention == 0 {
+		c.History.Retention = 30 * 24 * time.Hour
 	}
 	for i := range c.DataCenters {
 		if c.DataCenters[i].Proxy.Type == "" {

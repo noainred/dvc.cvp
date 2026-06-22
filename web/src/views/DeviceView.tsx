@@ -47,9 +47,12 @@ export function DeviceView({ serial, device }: Props) {
       )}
 
       <section className="panel">
-        <h3>장비 전체 트래픽</h3>
+        <h3>장비 전체 트래픽 <span className="cell-sub">(실시간 · 최근 ~1시간)</span></h3>
         <TrafficChart samples={devHistory ?? []} />
       </section>
+
+      <DeviceTrend serial={serial} />
+
 
       <section className="panel">
         <h3>포트 사용 현황 {interfaces ? `(${interfaces.length})` : ''}</h3>
@@ -103,6 +106,31 @@ function PortDetail({ serial, iface, onClose }: { serial: string; iface: Interfa
         {iface.neighbor && <PortStat label="이웃(LLDP)" value={iface.neighbor} />}
       </div>
       <TrafficChart samples={hist ?? []} height={180} />
+    </section>
+  )
+}
+
+// DeviceTrend shows the device's long-term (persisted) throughput history and
+// growth trend.
+function DeviceTrend({ serial }: { serial: string }) {
+  const { data } = usePolling(() => api.deviceTrend(serial, 30), [serial], 30000)
+  const pts = data?.series ?? []
+  return (
+    <section className="panel">
+      <h3>장기 추세 <span className="cell-sub">(영구저장 · 1분 간격 · 최근 30일)</span></h3>
+      {pts.length < 2 ? (
+        <p className="hint">추세 데이터 축적 중… 현재 {pts.length}개 샘플.</p>
+      ) : (
+        <>
+          {data && (
+            <p className="hint">
+              총 트래픽 {bps(data.throughput.current)} · 추세{' '}
+              {data.throughput.slopePerDay >= 0 ? '▲' : '▼'} {bps(Math.abs(data.throughput.slopePerDay))}/일
+            </p>
+          )}
+          <TrafficChart samples={pts} height={170} />
+        </>
+      )}
     </section>
   )
 }

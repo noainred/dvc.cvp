@@ -15,6 +15,9 @@
 - **전체 현황 대시보드** — 데이터센터/장비/포트 KPI, 포트 사용 현황(사용중·미사용·비활성·오류), 패밀리(7280/7504/7010)별 집계, 트래픽 상위 장비 Top 10
 - **실시간 포트 사용률** — 인터페이스별 인입/인출 bps 와 링크 속도 대비 사용률(%) 계산, SSE 로 실시간 갱신
 - **포트 사용/미사용 시각화** — 장비별 포트 그리드 히트맵. 사용중 포트는 사용률에 따라 녹색→적색, 미사용/비활성/오류 포트는 색상으로 구분
+- **트랜시버(GBIC)·DOM 모니터링** — 포트별 광모듈 존재/타입/벤더·PN·SN 인벤토리. 비어있는 포트를 "모듈 장착(즉시 가용)" vs "모듈 없음"으로 구분. DOM(Rx/Tx 광파워·온도·전압)과 광 경보(저광량/고온)
+- **임계치 경보·알림** — 사용률·광 경보·에러 급증·장비 중단·DC 연결불가 경보. Slack 호환 Webhook 알림(설정 시), 실시간 경보 배너
+- **용량 추세·예측** — 영구 저장(분 단위)된 포트 사용률·트래픽 시계열에 대한 선형 추세와 임계 도달일 예측
 - **트래픽 추이 차트** — 장비 전체 및 포트별 인입/인출 시계열 그래프
 - **다중 데이터센터 관제** — 사이트별 상태(정상/저하/연결불가), 프록시 방식, 장비·포트·트래픽 롤업
 - **프록시 연결** — 사이트별 SSH 점프호스트를 통한 터널링(직접 연결 `direct` 도 지원)
@@ -107,6 +110,9 @@ make build
 | `GET /api/devices/{serial}/history` | 장비 전체 트래픽 시계열 |
 | `GET /api/devices/{serial}/interface-history?name=Ethernet1` | 인터페이스 트래픽 시계열 |
 | `GET /api/stream` | **SSE** 실시간 스냅샷 스트림 |
+| `GET /api/alerts` | 활성 경보 + 최근 경보 이벤트 |
+| `GET /api/trend?days=30` | 전역 포트사용률·트래픽 추세 + 용량 예측 |
+| `GET /api/devices/{serial}/trend` | 장비 장기 트래픽 추세 |
 | `GET /api/version` | 현재 버전 + 업그레이드 가용 여부 |
 | `POST /api/upgrade/check` | 신규 릴리스 즉시 확인 |
 | `POST /api/upgrade` | 신규 버전 설치 후 서버 재시작 |
@@ -119,13 +125,24 @@ internal/
   config/            YAML 설정 로드·검증
   model/             도메인 타입(DataCenter/Device/Interface/…)
   proxy/             SSH 점프호스트 / direct 다이얼러
-  cvp/               CloudVision REST 클라이언트 + eAPI + Provider
+  cvp/               CloudVision REST 클라이언트 + eAPI(+트랜시버/DOM) + Provider
   collector/         폴링 루프·레이트 계산·포트 분류 + 데모 생성기(mock)
   store/             동시성 안전 인메모리 캐시 + 시계열 링버퍼
+  alert/             임계치 경보 엔진 + Webhook 알림
+  history/           bbolt 영구 저장(분 단위) + 선형 추세/예측
   api/               REST 핸들러·SSE 허브·정적 서빙
+  version/           빌드 버전(ldflags 주입)
+  upgrade/           릴리스 확인 · 자가 업그레이드
 web/                 React + TypeScript + Vite 대시보드 (의존성 없는 SVG 차트)
 config/              설정 예시
+data/                영구 히스토리 DB(런타임 생성, 커밋 제외)
 ```
+
+## 트랜시버(GBIC)·DOM · 경보 · 추세
+
+- **트랜시버/DOM**: CVP 모드에서 `show interfaces transceiver` 를 함께 수집해 포트별 광모듈 존재·타입(예: 100GBASE-SR4)·벤더/PN/SN 과 DOM(Rx/Tx 광파워·온도·전압)을 표시합니다. 비어있는 포트는 모듈 장착 여부로 "즉시 가용" vs "모듈 없음"을 구분합니다. EOS 버전별 필드명 차이가 있어 파서는 best-effort 이며, 데모 모드는 합성 데이터로 전 기능을 검증합니다.
+- **경보**(`alert.*`): 포트 사용률(경고/심각), 광 경보, 에러/폐기 급증, 장비 텔레메트리 중단, DC 연결불가를 매 폴링마다 평가합니다. `alert.webhookUrl` 설정 시 발생/해제 시 Slack 호환 메시지를 보냅니다.
+- **추세/예측**(`history.*`): 포트 사용률·트래픽을 1분 간격으로 bbolt 에 영구 저장하고(기본 30일 보관), 최소제곱 선형 회귀로 추세와 임계(기본 80%) 도달일을 추정합니다. 예보 모델이 아닌 **선형 추세 지표**이며, 가동 후 분 단위로 누적됩니다.
 
 ## 포트 상태 분류
 

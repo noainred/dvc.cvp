@@ -3,6 +3,7 @@ module github.com/noainred/dvc.cvp
 go 1.25.0
 
 require (
+	go.etcd.io/bbolt v1.5.0
 	golang.org/x/crypto v0.53.0
 	gopkg.in/yaml.v3 v3.0.1
 )

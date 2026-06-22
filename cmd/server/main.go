@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/noainred/dvc.cvp/internal/collector"
 	"github.com/noainred/dvc.cvp/internal/config"
 	"github.com/noainred/dvc.cvp/internal/cvp"
+	"github.com/noainred/dvc.cvp/internal/history"
 	"github.com/noainred/dvc.cvp/internal/store"
 	"github.com/noainred/dvc.cvp/internal/upgrade"
 	"github.com/noainred/dvc.cvp/internal/version"
@@ -46,19 +48,22 @@ func main() {
 	}
 
 	alerts := alert.New(cfg.Alert, st)
+	hist := openHistory(cfg.History)
+	defer hist.Close()
 
 	coll := collector.New(provider, st, cfg.Poll.Interval, cfg.Poll.Timeout)
 	hub := api.NewHub(st, alerts)
-	// After each poll: evaluate alerts first, then push the snapshot (which
-	// includes the freshly-updated active alerts) to dashboards.
+	// After each poll: evaluate alerts, persist a history sample, then push the
+	// snapshot (with the freshly-updated active alerts) to dashboards.
 	coll.OnUpdate(func() {
 		alerts.Evaluate()
+		hist.Record(st.Summary(), st.Devices(""))
 		hub.Broadcast()
 	})
 
 	upMgr := upgrade.New(cfg.Upgrade, version.Get())
 
-	apiH := api.NewAPI(st, cfg.Mode, upMgr, alerts)
+	apiH := api.NewAPI(st, cfg.Mode, upMgr, alerts, hist)
 	srv := api.NewServer(cfg.Server.Listen, cfg.Server.WebDir, apiH, hub)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -94,6 +99,24 @@ func loadConfig(path string) *config.Config {
 		log.Fatalf("load config: %v", err)
 	}
 	return cfg
+}
+
+// openHistory opens the persistent history store, or returns a nil store
+// (whose methods are no-ops) if disabled or unavailable.
+func openHistory(cfg config.HistoryConfig) *history.Store {
+	if !cfg.Enabled {
+		return nil
+	}
+	if dir := filepath.Dir(cfg.Path); dir != "" {
+		_ = os.MkdirAll(dir, 0o755)
+	}
+	h, err := history.Open(cfg.Path, cfg.Retention)
+	if err != nil {
+		log.Printf("history disabled: %v", err)
+		return nil
+	}
+	log.Printf("history: persisting to %s (retention %s)", cfg.Path, cfg.Retention)
+	return h
 }
 
 // newProvider selects the live CVP backend or the demo generator.

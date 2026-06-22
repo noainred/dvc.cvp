@@ -128,6 +128,34 @@ export interface LivePayload {
   alerts: Alert[]
 }
 
+export interface SummaryPoint {
+  t: string
+  portUsed: number
+  portTotal: number
+  inBps: number
+  outBps: number
+}
+
+export interface Trend {
+  points: number
+  current: number
+  slopePerDay: number
+  threshold?: number
+  daysToThreshold?: number
+  reachAt?: string
+}
+
+export interface TrendResponse {
+  series: SummaryPoint[]
+  portUsage: Trend
+  throughput: Trend
+}
+
+export interface DeviceTrendResponse {
+  series: Sample[]
+  throughput: Trend
+}
+
 export interface UpgradeStatus {
   current: string
   commit: string

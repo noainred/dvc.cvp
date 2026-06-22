@@ -6,23 +6,28 @@ import (
 	"net/http"
 	"time"
 
+	"strconv"
+
 	"github.com/noainred/dvc.cvp/internal/alert"
+	"github.com/noainred/dvc.cvp/internal/history"
 	"github.com/noainred/dvc.cvp/internal/store"
 	"github.com/noainred/dvc.cvp/internal/upgrade"
 	"github.com/noainred/dvc.cvp/internal/version"
 )
 
-// API holds the REST handlers backed by the store, upgrade manager and alerts.
+// API holds the REST handlers backed by the store, upgrade manager, alerts and
+// the long-term history store.
 type API struct {
 	store   *store.Store
 	mode    string
 	upgrade *upgrade.Manager
 	alerts  *alert.Engine
+	history *history.Store
 }
 
 // NewAPI creates the REST handler set.
-func NewAPI(s *store.Store, mode string, up *upgrade.Manager, al *alert.Engine) *API {
-	return &API{store: s, mode: mode, upgrade: up, alerts: al}
+func NewAPI(s *store.Store, mode string, up *upgrade.Manager, al *alert.Engine, hist *history.Store) *API {
+	return &API{store: s, mode: mode, upgrade: up, alerts: al, history: hist}
 }
 
 // Register attaches all REST routes to the mux.
@@ -32,6 +37,8 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/upgrade/check", a.upgradeCheck)
 	mux.HandleFunc("POST /api/upgrade", a.upgradeApply)
 	mux.HandleFunc("GET /api/alerts", a.alertsList)
+	mux.HandleFunc("GET /api/trend", a.trend)
+	mux.HandleFunc("GET /api/devices/{serial}/trend", a.deviceTrend)
 	mux.HandleFunc("GET /api/summary", a.summary)
 	mux.HandleFunc("GET /api/datacenters", a.datacenters)
 	mux.HandleFunc("GET /api/datacenters/{id}/devices", a.dcDevices)
@@ -121,6 +128,49 @@ func (a *API) interfaces(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) deviceHistory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, a.store.DeviceHistory(r.PathValue("serial")))
+}
+
+// trend returns the global long-term port-usage / throughput series plus a
+// linear capacity projection (default: when port usage reaches 80%).
+func (a *API) trend(w http.ResponseWriter, r *http.Request) {
+	since := time.Now().Add(-rangeDuration(r, 30))
+	pts := a.history.SummarySeries(since)
+	threshold := floatParam(r, "threshold", 80)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"series":     pts,
+		"portUsage":  history.PortUsageTrend(pts, threshold),
+		"throughput": history.ThroughputTrend(pts),
+	})
+}
+
+// deviceTrend returns a device's long-term throughput series and growth trend.
+func (a *API) deviceTrend(w http.ResponseWriter, r *http.Request) {
+	since := time.Now().Add(-rangeDuration(r, 30))
+	samples := a.history.DeviceSeries(r.PathValue("serial"), since)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"series":     samples,
+		"throughput": history.DeviceTrend(samples),
+	})
+}
+
+// rangeDuration reads ?days=N (default defDays), clamped to [1, 365].
+func rangeDuration(r *http.Request, defDays int) time.Duration {
+	d := defDays
+	if v := r.URL.Query().Get("days"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 365 {
+			d = n
+		}
+	}
+	return time.Duration(d) * 24 * time.Hour
+}
+
+func floatParam(r *http.Request, name string, def float64) float64 {
+	if v := r.URL.Query().Get(name); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
 }
 
 func (a *API) interfaceHistory(w http.ResponseWriter, r *http.Request) {

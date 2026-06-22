@@ -12,6 +12,10 @@ config/config.yaml
 *.test
 *.out
 
+# Persistent history DB
+/data/
+*.db
+
 # Node / frontend
 web/node_modules/
 web/dist/

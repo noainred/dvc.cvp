@@ -7,6 +7,7 @@ import { DeviceTable } from './components/DeviceTable'
 import { DeviceView } from './views/DeviceView'
 import { VersionBadge } from './components/VersionBadge'
 import { AlertsBar } from './components/AlertsPanel'
+import { TrendPanel } from './components/TrendPanel'
 
 type Route =
   | { view: 'overview' }
@@ -123,6 +124,8 @@ function Overview({
           </span>
         ))}
       </div>
+
+      <TrendPanel />
 
       <section className="panel">
         <h3>데이터센터 ({live.datacenters.length})</h3>
