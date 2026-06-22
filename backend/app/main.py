@@ -7,7 +7,7 @@ import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 from starlette.middleware.sessions import SessionMiddleware
@@ -184,7 +184,12 @@ app.add_middleware(SessionMiddleware, secret_key=_session_secret(), max_age=14 *
 # --- Static frontend --------------------------------------------------------
 @app.get("/")
 def index():
-    return FileResponse(FRONTEND_DIR / "index.html")
+    # Serve the HTML uncached and cache-bust the assets by version so a browser
+    # never gets stuck on a stale app.js/style.css after an update.
+    html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
+    html = html.replace("/static/app.js", f"/static/app.js?v={__version__}")
+    html = html.replace("/static/style.css", f"/static/style.css?v={__version__}")
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
 if FRONTEND_DIR.is_dir():
