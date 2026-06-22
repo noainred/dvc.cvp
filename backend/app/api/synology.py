@@ -45,13 +45,31 @@ def list_nas(db: Session = Depends(get_db)):
     return [syno_svc.public_dict(n) for n in syno_svc.list_nas(db)]
 
 
+def _register_with_otp(db: Session, nas: SynologyNas) -> dict | None:
+    """If an OTP is set, log in NOW (while it's fresh) to capture a trusted
+    device token so future polls never need OTP again."""
+    if not nas.otp_code:
+        return None
+    result = syno_svc.poll_nas(db, nas, store_metric=False)
+    db.refresh(nas)
+    return {
+        "connected": result.get("connected"),
+        "error": result.get("error"),
+        "device_token_saved": bool(nas.device_id),
+    }
+
+
 @router.post("/nas", status_code=201)
 def create_nas(payload: NasCreate, db: Session = Depends(get_db)):
     nas = SynologyNas(**payload.model_dump())
     db.add(nas)
     db.commit()
     db.refresh(nas)
-    return syno_svc.public_dict(nas)
+    connect = _register_with_otp(db, nas)
+    out = syno_svc.public_dict(nas)
+    if connect is not None:
+        out["connect_result"] = connect
+    return out
 
 
 @router.patch("/nas/{nas_id}")
@@ -70,7 +88,11 @@ def update_nas(nas_id: int, payload: NasUpdate, db: Session = Depends(get_db)):
         setattr(nas, key, value)
     db.commit()
     db.refresh(nas)
-    return syno_svc.public_dict(nas)
+    connect = _register_with_otp(db, nas)
+    out = syno_svc.public_dict(nas)
+    if connect is not None:
+        out["connect_result"] = connect
+    return out
 
 
 @router.delete("/nas/{nas_id}", status_code=204)

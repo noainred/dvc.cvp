@@ -200,6 +200,23 @@ class DiscoveredHost(Base):
     times_seen: Mapped[int] = mapped_column(Integer, default=1)
 
 
+class HostEvent(Base):
+    """UP/DOWN transition for a discovered host (from IP scans).
+
+    Recorded only on state change, so it stays small while letting us
+    reconstruct how long an IP has been online over time.
+    """
+
+    __tablename__ = "host_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ip: Mapped[str] = mapped_column(String(45), index=True)
+    ts: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+    is_up: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    __table_args__ = (Index("ix_host_events_ip_ts", "ip", "ts"),)
+
+
 class ScanRun(Base):
     """One IP scan execution - kept as a lightweight history of scans."""
 

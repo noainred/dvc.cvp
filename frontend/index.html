@@ -6,6 +6,9 @@
   <title>HomeLab Monitor</title>
   <link rel="stylesheet" href="/static/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- 차트 스크롤/줌(패닝)용 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 </head>
 <body>
   <!-- 로그인 오버레이 -->
@@ -302,6 +305,15 @@
         </div>
         <div id="userMsg" class="login-msg"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- IP(스캔 호스트) 상세 팝업 -->
+  <div class="modal-backdrop" id="hostModal">
+    <div class="modal" style="width:480px; max-width:94vw; max-height:85vh; overflow:auto">
+      <h3 id="hostModalTitle">IP 상세</h3>
+      <div id="hostModalBody"></div>
+      <div class="modal-actions"><button type="button" class="btn" id="closeHost">닫기</button></div>
     </div>
   </div>
 

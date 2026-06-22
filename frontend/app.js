@@ -95,6 +95,14 @@ $$(".tab").forEach((tab) => tab.addEventListener("click", () => {
   if (loaders[tab.dataset.tab]) loaders[tab.dataset.tab]();
 }));
 
+// chartjs-plugin-zoom 등록 (스크립트 태그 UMD). 자동 등록되지만 방어적으로 시도.
+(function registerZoom() {
+  try {
+    const z = window.ChartZoom || window.chartjsPluginZoom || window["chartjs-plugin-zoom"];
+    if (window.Chart && z && (z.id || z.default)) Chart.register(z.default || z);
+  } catch (_) { /* 이미 등록됐거나 미지원 — 무시 */ }
+})();
+
 const charts = {};
 function drawChart(id, config) {
   const ctx = document.getElementById(id);
@@ -189,8 +197,26 @@ async function loadDetail() {
   const isRaw = s.source === "raw";
   const up = s.series.map((p) => (isRaw ? (p.up ? 100 : 0) : p.uptime));
   const lat = s.series.map((p) => p.latency);
-  drawChart("uptimeChart", { type: "line", data: { labels, datasets: [{ label: "가동률 (%)", data: up, borderColor: "#34d399", backgroundColor: "rgba(52,211,153,.15)", fill: true, stepped: isRaw, pointRadius: 0, tension: 0.2 }] }, options: { ...CHART_BASE, scales: { ...CHART_BASE.scales, y: { ...CHART_BASE.scales.y, min: 0, max: 100 } } } });
-  drawChart("latencyChart", { type: "line", data: { labels, datasets: [{ label: "지연시간 (ms)", data: lat, borderColor: "#4f8cff", backgroundColor: "rgba(79,140,255,.12)", fill: true, pointRadius: 0, tension: 0.2 }] }, options: CHART_BASE });
+
+  // 분/시간/날짜 단위로 가로 드래그 스크롤(패닝) + 휠 줌. 초기엔 최근 구간만 보이고
+  // 드래그하면 그 단위(분/시간/날짜)로 과거 데이터로 이동.
+  const n = labels.length;
+  const win = ({ minute: 60, hour: 72, day: 60 })[detailGran] || 60;
+  const xMin = n > win ? n - win : 0;
+  const xMax = n > 0 ? n - 1 : 0;
+  const zoomCfg = {
+    pan: { enabled: true, mode: "x" },
+    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
+    limits: { x: { min: 0, max: Math.max(0, n - 1) } },
+  };
+  const detailOpts = (yScale) => ({
+    ...CHART_BASE,
+    scales: { x: { ...CHART_BASE.scales.x, min: xMin, max: xMax }, y: yScale },
+    plugins: { ...CHART_BASE.plugins, zoom: zoomCfg },
+  });
+
+  drawChart("uptimeChart", { type: "line", data: { labels, datasets: [{ label: "가동률 (%)", data: up, borderColor: "#34d399", backgroundColor: "rgba(52,211,153,.15)", fill: true, stepped: isRaw, pointRadius: 0, tension: 0.2 }] }, options: detailOpts({ ...CHART_BASE.scales.y, min: 0, max: 100 }) });
+  drawChart("latencyChart", { type: "line", data: { labels, datasets: [{ label: "지연시간 (ms)", data: lat, borderColor: "#4f8cff", backgroundColor: "rgba(79,140,255,.12)", fill: true, pointRadius: 0, tension: 0.2 }] }, options: detailOpts(CHART_BASE.scales.y) });
   const ev = await api(`/api/devices/${detailDevice}/events?limit=30`);
   $("#detailEvents tbody").innerHTML = ev.map((e) => `<tr><td>${fmtTime(e.ts)}</td><td><span class="badge ${e.is_up ? "up" : "down"}">${e.is_up ? "복구" : "다운"}</span></td><td>${fmtDuration(e.prev_duration_s)}</td></tr>`).join("") || '<tr><td colspan="3" class="muted">이벤트 없음</td></tr>';
 }
@@ -206,13 +232,48 @@ async function loadScan() {
     const cls = h.last_up ? "up" : "down";
     const reg = h.device_id ? '<span class="badge up">등록됨</span>'
       : `<button class="btn small" data-ip="${h.ip}" data-host="${h.hostname || ""}" data-act="reg">장비로 추가</button>`;
-    return `<tr><td><span class="badge ${cls}">${h.last_up ? "사용중" : "꺼짐"}</span></td><td>${h.ip}</td>
+    return `<tr><td><span class="badge ${cls}">${h.last_up ? "사용중" : "꺼짐"}</span></td>
+      <td><a class="iplink" data-hid="${h.id}">${h.ip}</a></td>
       <td>${h.mac || "—"}</td><td>${h.hostname || "—"}</td><td>${fmtTime(h.first_seen)}</td>
       <td>${fmtTime(h.last_seen)}</td><td>${h.times_seen}</td><td>${reg}</td></tr>`;
   }).join("") || '<tr><td colspan="8" class="muted">발견된 호스트가 없습니다. [지금 스캔]을 눌러보세요.</td></tr>';
   $$('#scanTable [data-act="reg"]').forEach((b) => b.addEventListener("click", () => {
     openDeviceModal({ host: b.dataset.ip, name: b.dataset.host || b.dataset.ip, type: "other", check_method: "icmp", enabled: true });
   }));
+  $$('#scanTable .iplink').forEach((a) => a.addEventListener("click", () => openHostModal(a.dataset.hid)));
+}
+
+// IP 클릭 → 그동안 켜져있던 시간 팝업
+const hostModal = $("#hostModal");
+$("#closeHost").addEventListener("click", () => hostModal.classList.remove("show"));
+hostModal.addEventListener("click", (e) => { if (e.target === hostModal) hostModal.classList.remove("show"); });
+async function openHostModal(id) {
+  $("#hostModalTitle").textContent = "IP 상세";
+  $("#hostModalBody").innerHTML = '<p class="muted">불러오는 중…</p>';
+  hostModal.classList.add("show");
+  try {
+    const h = await api(`/api/scan/hosts/${id}/uptime`);
+    $("#hostModalTitle").textContent = `${h.ip}${h.hostname ? " · " + h.hostname : ""}`;
+    const events = (h.events || []).map((e) =>
+      `<tr><td>${fmtTime(e.ts)}</td><td><span class="badge ${e.is_up ? "up" : "down"}">${e.is_up ? "켜짐" : "꺼짐"}</span></td></tr>`).join("")
+      || '<tr><td colspan="2" class="muted">상태 변경 기록이 아직 없습니다.</td></tr>';
+    $("#hostModalBody").innerHTML = `
+      <div class="kv">
+        <div class="item"><div class="k">현재 상태</div><div class="v"><span class="badge ${h.last_up ? "up" : "down"}">${h.last_up ? "사용중" : "꺼짐"}</span></div></div>
+        <div class="item"><div class="k">현재 연속 켜짐</div><div class="v" style="font-size:16px">${h.last_up ? fmtDuration(h.current_up_seconds) : "-"}</div></div>
+        <div class="item"><div class="k">총 켜져있던 시간</div><div class="v" style="font-size:16px">${fmtDuration(h.total_online_seconds)}</div></div>
+        <div class="item"><div class="k">관측 가동률</div><div class="v">${h.online_pct != null ? h.online_pct + "%" : "—"}</div></div>
+        <div class="item"><div class="k">MAC</div><div class="v" style="font-size:13px">${h.mac || "—"}</div></div>
+        <div class="item"><div class="k">발견 횟수</div><div class="v">${h.times_seen}</div></div>
+        <div class="item"><div class="k">최초 발견</div><div class="v" style="font-size:13px">${fmtTime(h.first_seen)}</div></div>
+        <div class="item"><div class="k">마지막 발견</div><div class="v" style="font-size:13px">${fmtTime(h.last_seen)}</div></div>
+      </div>
+      <p class="muted" style="margin-top:8px">스캔 주기 ${h.scan_interval_minutes}분 기준 (해상도 약 ±${h.scan_interval_minutes}분)</p>
+      <h2 style="font-size:14px;margin:14px 0 8px">상태 변경 이력</h2>
+      <table class="data-table"><thead><tr><th>시간</th><th>상태</th></tr></thead><tbody>${events}</tbody></table>`;
+  } catch (err) {
+    $("#hostModalBody").innerHTML = `<p class="muted">오류: ${err.message}</p>`;
+  }
 }
 loaders.scan = loadScan;
 $("#runScan").addEventListener("click", async () => {
@@ -319,10 +380,17 @@ nasForm.addEventListener("submit", async (e) => {
     https: nasForm.https.checked, verify_ssl: nasForm.verify_ssl.checked, username: nasForm.username.value.trim(),
     enabled: nasForm.enabled.checked };
   if (nasForm.password.value) p.password = nasForm.password.value;
-  if (nasForm.otp_code.value.trim()) p.otp_code = nasForm.otp_code.value.trim();
+  const otp = nasForm.otp_code.value.trim();
+  if (otp) p.otp_code = otp;
   try {
-    if (id) await api(`/api/synology/nas/${id}`, { method: "PATCH", body: JSON.stringify(p) });
-    else await api("/api/synology/nas", { method: "POST", body: JSON.stringify(p) });
+    let res;
+    if (id) res = await api(`/api/synology/nas/${id}`, { method: "PATCH", body: JSON.stringify(p) });
+    else res = await api("/api/synology/nas", { method: "POST", body: JSON.stringify(p) });
+    if (otp && res && res.connect_result) {
+      const c = res.connect_result;
+      if (c.device_token_saved) alert("인증 성공 — 신뢰기기로 등록되어 이후엔 OTP 없이 계속 사용됩니다.");
+      else if (c.error) alert("연결 실패: " + c.error + "\n(OTP는 30초 내에 입력·저장해야 합니다. 새 코드로 다시 시도하세요.)");
+    }
     nasModal.classList.remove("show"); loadSynology();
   } catch (err) { alert("저장 실패: " + err.message); }
 });

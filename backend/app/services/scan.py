@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import DiscoveredHost, Device, ScanRun
+from ..models import DiscoveredHost, Device, HostEvent, ScanRun
 from ..monitors import scanner
 from . import settings as settings_svc
 
@@ -66,8 +66,11 @@ def run_scan(db: Session, subnet: Optional[str] = None) -> Dict[str, Any]:
                     times_seen=1,
                 )
             )
+            db.add(HostEvent(ip=h.ip, ts=now, is_up=True))  # first seen -> up
             new_count += 1
         else:
+            if not row.last_up:  # came back online
+                db.add(HostEvent(ip=h.ip, ts=now, is_up=True))
             row.last_seen = now
             row.last_up = True
             row.times_seen = (row.times_seen or 0) + 1
@@ -79,6 +82,8 @@ def run_scan(db: Session, subnet: Optional[str] = None) -> Dict[str, Any]:
     # Hosts previously seen in this subnet but missing now -> mark offline.
     for row in db.execute(select(DiscoveredHost)).scalars().all():
         if row.ip not in seen_ips and _in_subnet(row.ip, subnet):
+            if row.last_up:  # transition up -> down
+                db.add(HostEvent(ip=row.ip, ts=now, is_up=False))
             row.last_up = False
 
     try:
@@ -124,6 +129,60 @@ def list_hosts(db: Session) -> List[Dict[str, Any]]:
             }
         )
     return out
+
+
+def host_uptime(db: Session, host_id: int) -> Optional[Dict[str, Any]]:
+    """How long a discovered host has been online, from scan transition events."""
+    host = db.get(DiscoveredHost, host_id)
+    if host is None:
+        return None
+    now = _utcnow()
+    events = (
+        db.execute(select(HostEvent).where(HostEvent.ip == host.ip).order_by(HostEvent.ts))
+        .scalars()
+        .all()
+    )
+
+    total_online = 0.0
+    cur_state: Optional[bool] = None
+    last_ts: Optional[dt.datetime] = None
+    for e in events:
+        if last_ts is not None and cur_state:
+            total_online += (e.ts - last_ts).total_seconds()
+        cur_state = e.is_up
+        last_ts = e.ts
+
+    current_up = 0.0
+    if host.last_up:
+        if cur_state and last_ts is not None:
+            current_up = (now - last_ts).total_seconds()
+            total_online += current_up
+        elif host.first_seen:  # no events fallback
+            current_up = (now - host.first_seen).total_seconds()
+            total_online = current_up
+
+    observed = (now - host.first_seen).total_seconds() if host.first_seen else 0.0
+    online_pct = round(total_online / observed * 100, 2) if observed > 0 else None
+
+    return {
+        "id": host.id,
+        "ip": host.ip,
+        "mac": host.mac,
+        "hostname": host.hostname,
+        "last_up": host.last_up,
+        "times_seen": host.times_seen,
+        "first_seen": host.first_seen.isoformat() + "Z" if host.first_seen else None,
+        "last_seen": host.last_seen.isoformat() + "Z" if host.last_seen else None,
+        "current_up_seconds": int(current_up),
+        "total_online_seconds": int(total_online),
+        "observed_seconds": int(observed),
+        "online_pct": online_pct,
+        "scan_interval_minutes": int(settings_svc.get(db, "scan").get("interval_minutes", 10)),
+        "events": [
+            {"ts": e.ts.isoformat() + "Z", "is_up": e.is_up}
+            for e in sorted(events, key=lambda x: x.ts, reverse=True)[:50]
+        ],
+    }
 
 
 def last_run(db: Session) -> Optional[Dict[str, Any]]:
