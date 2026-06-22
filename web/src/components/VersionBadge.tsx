@@ -5,7 +5,7 @@ import { api } from '../api'
 // VersionBadge shows the portal's current build version and, when a newer
 // release is detected, offers a one-click self-upgrade (which restarts the
 // server into the new binary).
-export function VersionBadge() {
+export function VersionBadge({ admin = true }: { admin?: boolean }) {
   const [st, setSt] = useState<UpgradeStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -48,7 +48,7 @@ export function VersionBadge() {
       <span className="version" title={`commit ${st.commit} · built ${st.buildTime}`}>
         {st.current}
       </span>
-      {st.upgradeAvailable ? (
+      {!admin ? null : st.upgradeAvailable ? (
         <button className="upgrade-pill" disabled={busy || !st.enabled} onClick={apply}>
           ▲ {st.latest} 업그레이드
         </button>

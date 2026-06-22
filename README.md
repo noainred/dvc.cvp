@@ -22,6 +22,11 @@
 - **다중 데이터센터 관제** — 사이트별 상태(정상/저하/연결불가), 프록시 방식, 장비·포트·트래픽 롤업
 - **프록시 연결** — 사이트별 SSH 점프호스트를 통한 터널링(직접 연결 `direct` 도 지원)
 - **버전 표시 & 포탈 자동 업그레이드** — 상단바에 현재 빌드 버전 표시, 신규 릴리스 감지 시 원클릭(또는 자동) 자가 업그레이드
+- **LLDP 토폴로지** — spine/leaf/mgmt 자동 연결 그래프(데이터센터별)
+- **Top Talkers(sFlow/IPFIX)·LANZ 혼잡** — 플로우 상위/큐 혼잡·마이크로버스트 (데모 데이터; 실수집기 연동 지점 명시)
+- **포트 회수 분석** — 오래 미사용된 free 포트(모듈 장착 vs 없음)로 회수·재배치 후보 식별
+- **EOS 버전 인벤토리·컴플라이언스** — 버전별 집계 + 구성 비준수 장비
+- **RBAC + 감사 로그** — 로그인/역할(admin·viewer), 자가 업그레이드·감사 로그는 admin 전용
 
 ## 아키텍처
 
@@ -110,6 +115,13 @@ make build
 | `GET /api/devices/{serial}/history` | 장비 전체 트래픽 시계열 |
 | `GET /api/devices/{serial}/interface-history?name=Ethernet1` | 인터페이스 트래픽 시계열 |
 | `GET /api/stream` | **SSE** 실시간 스냅샷 스트림 |
+| `GET /api/topology?dc=` | LLDP 토폴로지(노드+인접) |
+| `GET /api/flows?dc=&limit=` | Top Talkers(sFlow/IPFIX) |
+| `GET /api/congestion?dc=&limit=` | LANZ 혼잡/마이크로버스트 |
+| `GET /api/reclaim?days=` | 유휴 미사용 포트(회수 대상) |
+| `GET /api/compliance` | EOS 버전 인벤토리 + 컴플라이언스 |
+| `POST /api/login` · `POST /api/logout` · `GET /api/auth` | 인증(RBAC) |
+| `GET /api/audit` | 감사 로그(admin) |
 | `GET /api/alerts` | 활성 경보 + 최근 경보 이벤트 |
 | `GET /api/trend?days=30` | 전역 포트사용률·트래픽 추세 + 용량 예측 |
 | `GET /api/devices/{serial}/trend` | 장비 장기 트래픽 추세 |
@@ -130,6 +142,9 @@ internal/
   store/             동시성 안전 인메모리 캐시 + 시계열 링버퍼
   alert/             임계치 경보 엔진 + Webhook 알림
   history/           bbolt 영구 저장(분 단위) + 선형 추세/예측
+  flows/             Top Talkers 생성(sFlow/IPFIX 연동 지점)
+  lanz/              LANZ 혼잡 이벤트 생성(연동 지점)
+  auth/              RBAC 인증 + 감사 로그
   api/               REST 핸들러·SSE 허브·정적 서빙
   version/           빌드 버전(ldflags 주입)
   upgrade/           릴리스 확인 · 자가 업그레이드

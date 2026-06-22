@@ -16,6 +16,18 @@ poll:
   timeout: 8s # 폴링 1회 타임아웃
   historyPoints: 360 # 인터페이스별 보관 샘플 수 (10s × 360 ≈ 1시간)
 
+# 접근 제어(RBAC) + 감사 로그. enabled=false(기본)면 인증 없이 모두 admin.
+# enabled=true 면 로그인 필요, admin 만 자가 업그레이드/감사 로그 조회 가능.
+auth:
+  enabled: false
+  users:
+    - username: admin
+      password: "CHANGE_ME" # 평문 또는 bcrypt 해시("$2...")
+      role: admin
+    - username: viewer
+      password: "CHANGE_ME"
+      role: viewer
+
 # 임계치 경보 및 알림. WebhookURL 설정 시 발생/해제 시 Slack 호환 메시지 전송.
 alert:
   enabled: true

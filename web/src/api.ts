@@ -13,17 +13,61 @@ import type {
   UpgradeStatus
 } from './types'
 
+export function token(): string {
+  return localStorage.getItem('dvc_token') || ''
+}
+function authHeaders(): Record<string, string> {
+  const t = token()
+  return t ? { Authorization: `Bearer ${t}` } : {}
+}
+function on401(status: number) {
+  // A previously valid token expired mid-session — drop it and reload to login.
+  if (status === 401 && token()) {
+    localStorage.removeItem('dvc_token')
+    location.reload()
+  }
+}
+
 export async function getJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url)
+  const res = await fetch(url, { headers: authHeaders() })
+  on401(res.status)
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`)
   return (await res.json()) as T
 }
 
-export async function postJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url, { method: 'POST' })
+export async function postJSON<T>(url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  })
+  on401(res.status)
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error((data && (data as any).error) || `${url}: HTTP ${res.status}`)
   return data as T
+}
+
+export const auth = {
+  status: () => getJSON<{ enabled: boolean; role: string; username?: string }>('/api/auth'),
+  async login(username: string, password: string) {
+    const r = await postJSON<{ token: string; role: string; username: string }>('/api/login', {
+      username,
+      password
+    })
+    localStorage.setItem('dvc_token', r.token)
+    return r
+  },
+  async logout() {
+    try {
+      await postJSON('/api/logout')
+    } finally {
+      localStorage.removeItem('dvc_token')
+    }
+  },
+  audit: () =>
+    getJSON<{ time: string; user: string; action: string; detail?: string; ip?: string; result: string }[]>(
+      '/api/audit'
+    )
 }
 
 export const api = {
@@ -62,7 +106,8 @@ export function useLive(): { live: LivePayload | null; connected: boolean } {
 
     const connect = () => {
       if (stopped) return
-      const es = new EventSource('/api/stream')
+      const t = token()
+      const es = new EventSource(t ? `/api/stream?token=${encodeURIComponent(t)}` : '/api/stream')
       esRef.current = es
       es.addEventListener('snapshot', (ev) => {
         try {

@@ -19,6 +19,7 @@ import (
 
 	"github.com/noainred/dvc.cvp/internal/alert"
 	"github.com/noainred/dvc.cvp/internal/api"
+	"github.com/noainred/dvc.cvp/internal/auth"
 	"github.com/noainred/dvc.cvp/internal/collector"
 	"github.com/noainred/dvc.cvp/internal/config"
 	"github.com/noainred/dvc.cvp/internal/cvp"
@@ -62,9 +63,10 @@ func main() {
 	})
 
 	upMgr := upgrade.New(cfg.Upgrade, version.Get())
+	authMgr := auth.New(cfg.Auth)
 
-	apiH := api.NewAPI(st, cfg.Mode, upMgr, alerts, hist)
-	srv := api.NewServer(cfg.Server.Listen, cfg.Server.WebDir, apiH, hub)
+	apiH := api.NewAPI(st, cfg.Mode, upMgr, alerts, hist, authMgr)
+	srv := api.NewServer(cfg.Server.Listen, cfg.Server.WebDir, apiH, hub, authMgr)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

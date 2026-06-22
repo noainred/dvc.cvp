@@ -3,12 +3,15 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/noainred/dvc.cvp/internal/alert"
+	"github.com/noainred/dvc.cvp/internal/auth"
 	"github.com/noainred/dvc.cvp/internal/flows"
 	"github.com/noainred/dvc.cvp/internal/history"
 	"github.com/noainred/dvc.cvp/internal/lanz"
@@ -18,24 +21,29 @@ import (
 	"github.com/noainred/dvc.cvp/internal/version"
 )
 
-// API holds the REST handlers backed by the store, upgrade manager, alerts and
-// the long-term history store.
+// API holds the REST handlers backed by the store, upgrade manager, alerts,
+// the long-term history store and the auth manager.
 type API struct {
 	store   *store.Store
 	mode    string
 	upgrade *upgrade.Manager
 	alerts  *alert.Engine
 	history *history.Store
+	auth    *auth.Manager
 }
 
 // NewAPI creates the REST handler set.
-func NewAPI(s *store.Store, mode string, up *upgrade.Manager, al *alert.Engine, hist *history.Store) *API {
-	return &API{store: s, mode: mode, upgrade: up, alerts: al, history: hist}
+func NewAPI(s *store.Store, mode string, up *upgrade.Manager, al *alert.Engine, hist *history.Store, au *auth.Manager) *API {
+	return &API{store: s, mode: mode, upgrade: up, alerts: al, history: hist, auth: au}
 }
 
 // Register attaches all REST routes to the mux.
 func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", a.health)
+	mux.HandleFunc("POST /api/login", a.login)
+	mux.HandleFunc("POST /api/logout", a.logout)
+	mux.HandleFunc("GET /api/auth", a.authStatus)
+	mux.HandleFunc("GET /api/audit", a.auditLog)
 	mux.HandleFunc("GET /api/version", a.version)
 	mux.HandleFunc("POST /api/upgrade/check", a.upgradeCheck)
 	mux.HandleFunc("POST /api/upgrade", a.upgradeApply)
@@ -65,32 +73,98 @@ func (a *API) health(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// login authenticates a user and issues a session token (header + cookie).
+func (a *API) login(w http.ResponseWriter, r *http.Request) {
+	var body struct{ Username, Password string }
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	token, role, err := a.auth.Login(body.Username, body.Password, clientIP(r))
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	auth.SetCookie(w, token)
+	writeJSON(w, http.StatusOK, map[string]any{"token": token, "role": role, "username": body.Username})
+}
+
+// logout invalidates the caller's session.
+func (a *API) logout(w http.ResponseWriter, r *http.Request) {
+	a.auth.Logout(auth.Token(r), clientIP(r))
+	auth.ClearCookie(w)
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+// authStatus reports whether auth is enabled and the caller's identity/role.
+func (a *API) authStatus(w http.ResponseWriter, r *http.Request) {
+	if !a.auth.Enabled() {
+		writeJSON(w, http.StatusOK, map[string]any{"enabled": false, "role": auth.RoleAdmin})
+		return
+	}
+	user, role, ok := a.auth.Resolve(auth.Token(r))
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]any{"enabled": true, "role": ""})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": true, "username": user, "role": role})
+}
+
+// auditLog returns recent audit entries (admin only — gated by middleware).
+func (a *API) auditLog(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, a.auth.Audit())
+}
+
+// recordAction writes an audit entry attributing the action to the caller.
+func (a *API) recordAction(r *http.Request, action, detail, result string) {
+	user := auth.RoleAdmin
+	if a.auth.Enabled() {
+		if u, _, ok := a.auth.Resolve(auth.Token(r)); ok {
+			user = u
+		} else {
+			user = "anon"
+		}
+	}
+	a.auth.Record(user, action, detail, clientIP(r), result)
+}
+
+func clientIP(r *http.Request) string {
+	if f := r.Header.Get("X-Forwarded-For"); f != "" {
+		return strings.TrimSpace(strings.Split(f, ",")[0])
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
 // version returns the current build and upgrade availability for the portal.
 func (a *API) version(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, a.upgrade.Status())
 }
 
 // upgradeCheck forces a release check and returns the refreshed status.
-func (a *API) upgradeCheck(w http.ResponseWriter, _ *http.Request) {
+func (a *API) upgradeCheck(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	st, err := a.upgrade.Check(ctx)
 	if err != nil {
+		a.recordAction(r, "upgrade-check", err.Error(), "fail")
 		writeJSON(w, http.StatusBadGateway, st)
 		return
 	}
+	a.recordAction(r, "upgrade-check", st.Latest, "ok")
 	writeJSON(w, http.StatusOK, st)
 }
 
 // upgradeApply downloads and installs the newest release, then re-execs. The
 // response is sent before the process restarts.
-func (a *API) upgradeApply(w http.ResponseWriter, _ *http.Request) {
+func (a *API) upgradeApply(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	if err := a.upgrade.Apply(ctx); err != nil {
+		a.recordAction(r, "upgrade-apply", err.Error(), "fail")
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	a.recordAction(r, "upgrade-apply", a.upgrade.Status().Latest, "ok")
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"status": "upgrading",
 		"detail": "새 버전을 설치했습니다. 서버가 곧 재시작됩니다.",

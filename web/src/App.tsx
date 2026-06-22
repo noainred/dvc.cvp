@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { useLive } from './api'
+import { useEffect, useMemo, useState } from 'react'
+import { auth, useLive } from './api'
+import { Login } from './components/Login'
 import type { Device } from './types'
 import { SummaryCards } from './components/SummaryCards'
 import { DataCenterTable } from './components/DataCenterTable'
@@ -9,6 +10,7 @@ import { VersionBadge } from './components/VersionBadge'
 import { AlertsBar } from './components/AlertsPanel'
 import { TrendPanel } from './components/TrendPanel'
 import {
+  AuditView,
   ComplianceView,
   CongestionView,
   FlowsView,
@@ -25,6 +27,13 @@ type Route =
   | { view: 'congestion' }
   | { view: 'reclaim' }
   | { view: 'compliance' }
+  | { view: 'audit' }
+
+interface AuthState {
+  enabled: boolean
+  role: string
+  username?: string
+}
 
 const NAV: { key: Route['view']; label: string }[] = [
   { key: 'overview', label: '현황' },
@@ -38,6 +47,18 @@ const NAV: { key: Route['view']; label: string }[] = [
 export default function App() {
   const { live, connected } = useLive()
   const [route, setRoute] = useState<Route>({ view: 'overview' })
+  const [authState, setAuthState] = useState<AuthState | null>(null)
+
+  useEffect(() => {
+    auth.status().then(setAuthState).catch(() => setAuthState({ enabled: false, role: 'admin' }))
+  }, [])
+  const refreshAuth = () => auth.status().then(setAuthState).catch(() => {})
+
+  if (authState && authState.enabled && !authState.role) {
+    return <Login onSuccess={refreshAuth} />
+  }
+  const role = authState?.role || 'admin'
+  const tabs = role === 'admin' ? [...NAV, { key: 'audit' as Route['view'], label: '감사로그' }] : NAV
 
   const devices = live?.devices ?? []
   const datacenters = live?.datacenters ?? []
@@ -63,12 +84,27 @@ export default function App() {
               갱신 {new Date(live.summary.updatedAt).toLocaleTimeString()}
             </span>
           )}
-          <VersionBadge />
+          {authState?.enabled && (
+            <span className="user-box">
+              {authState.username}
+              <button
+                className="logout-btn"
+                onClick={async () => {
+                  await auth.logout()
+                  setRoute({ view: 'overview' })
+                  refreshAuth()
+                }}
+              >
+                로그아웃
+              </button>
+            </span>
+          )}
+          <VersionBadge admin={role === 'admin'} />
         </div>
       </header>
 
       <nav className="tabs">
-        {NAV.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             className={`tab${route.view === t.key ? ' active' : ''}`}
@@ -136,6 +172,7 @@ export default function App() {
         {live && route.view === 'compliance' && (
           <ComplianceView onDevice={(serial) => setRoute({ view: 'device', serial })} />
         )}
+        {live && route.view === 'audit' && <AuditView />}
       </main>
     </div>
   )

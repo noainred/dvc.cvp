@@ -25,7 +25,24 @@ type Config struct {
 	Upgrade     UpgradeConfig      `yaml:"upgrade"`
 	Alert       AlertConfig        `yaml:"alert"`
 	History     HistoryConfig      `yaml:"history"`
+	Auth        AuthConfig         `yaml:"auth"`
 	DataCenters []DataCenterConfig `yaml:"datacenters"`
+}
+
+// AuthConfig enables role-based access control. When Enabled is false (demo
+// default) the portal is open and every request is treated as admin. When
+// enabled, users must log in; only admins may trigger self-upgrade or view the
+// audit log. Passwords may be plaintext or a bcrypt hash ("$2...").
+type AuthConfig struct {
+	Enabled bool         `yaml:"enabled"`
+	Users   []UserConfig `yaml:"users"`
+}
+
+// UserConfig is one portal user.
+type UserConfig struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	Role     string `yaml:"role"` // admin | viewer
 }
 
 // HistoryConfig controls long-term persistence of throughput/port-usage series

@@ -1,7 +1,36 @@
 import { useState } from 'react'
 import type { Congestion, DataCenter, Flow, ReclaimPort, Topology, TopologyNode } from '../types'
-import { api, usePolling } from '../api'
+import { api, auth, usePolling } from '../api'
 import { bps, speed, statusColor } from '../format'
+
+// AuditView — sensitive-action audit log (admin only).
+export function AuditView() {
+  const { data } = usePolling(() => auth.audit(), [], 10000)
+  const rows = data ?? []
+  return (
+    <section className="panel">
+      <h3>감사 로그 ({rows.length})</h3>
+      <table className="data-table">
+        <thead>
+          <tr><th>시각</th><th>사용자</th><th>동작</th><th>상세</th><th>IP</th><th>결과</th></tr>
+        </thead>
+        <tbody>
+          {rows.map((e, i) => (
+            <tr key={i}>
+              <td className="cell-sub">{new Date(e.time).toLocaleString()}</td>
+              <td className="cell-title">{e.user}</td>
+              <td>{e.action}</td>
+              <td className="cell-sub">{e.detail || '-'}</td>
+              <td className="mono">{e.ip || '-'}</td>
+              <td><span className={e.result === 'ok' ? 'ok-text' : 'err-text'}>{e.result}</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length === 0 && <p className="hint">기록 없음.</p>}
+    </section>
+  )
+}
 
 // DcSelect is a shared data-center filter dropdown.
 function DcSelect({
