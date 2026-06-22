@@ -6,21 +6,23 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/noainred/dvc.cvp/internal/alert"
 	"github.com/noainred/dvc.cvp/internal/store"
 	"github.com/noainred/dvc.cvp/internal/upgrade"
 	"github.com/noainred/dvc.cvp/internal/version"
 )
 
-// API holds the REST handlers backed by the store and upgrade manager.
+// API holds the REST handlers backed by the store, upgrade manager and alerts.
 type API struct {
 	store   *store.Store
 	mode    string
 	upgrade *upgrade.Manager
+	alerts  *alert.Engine
 }
 
 // NewAPI creates the REST handler set.
-func NewAPI(s *store.Store, mode string, up *upgrade.Manager) *API {
-	return &API{store: s, mode: mode, upgrade: up}
+func NewAPI(s *store.Store, mode string, up *upgrade.Manager, al *alert.Engine) *API {
+	return &API{store: s, mode: mode, upgrade: up, alerts: al}
 }
 
 // Register attaches all REST routes to the mux.
@@ -29,6 +31,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/version", a.version)
 	mux.HandleFunc("POST /api/upgrade/check", a.upgradeCheck)
 	mux.HandleFunc("POST /api/upgrade", a.upgradeApply)
+	mux.HandleFunc("GET /api/alerts", a.alertsList)
 	mux.HandleFunc("GET /api/summary", a.summary)
 	mux.HandleFunc("GET /api/datacenters", a.datacenters)
 	mux.HandleFunc("GET /api/datacenters/{id}/devices", a.dcDevices)
@@ -81,6 +84,14 @@ func (a *API) upgradeApply(w http.ResponseWriter, _ *http.Request) {
 
 func (a *API) summary(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, a.store.Summary())
+}
+
+// alertsList returns the active alerts and recent alert events.
+func (a *API) alertsList(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"active": a.alerts.Active(),
+		"recent": a.alerts.Recent(),
+	})
 }
 
 func (a *API) datacenters(w http.ResponseWriter, _ *http.Request) {

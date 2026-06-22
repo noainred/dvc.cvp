@@ -162,3 +162,24 @@ type FamilyCount struct {
 	Family string `json:"family"`
 	Count  int    `json:"count"`
 }
+
+// Alert severities.
+const (
+	SevCritical = "critical"
+	SevWarning  = "warning"
+)
+
+// Alert is a threshold/health condition raised by the alert engine.
+type Alert struct {
+	Key        string    `json:"key"`
+	Severity   string    `json:"severity"`
+	Type       string    `json:"type"` // util | optic | errors | device | datacenter
+	DataCenter string    `json:"dataCenter,omitempty"`
+	Device     string    `json:"device,omitempty"`
+	Hostname   string    `json:"hostname,omitempty"`
+	Interface  string    `json:"interface,omitempty"`
+	Message    string    `json:"message"`
+	Value      float64   `json:"value,omitempty"`
+	Since      time.Time `json:"since"`
+	Active     bool      `json:"active"`
+}

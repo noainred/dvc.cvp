@@ -121,7 +121,7 @@ func (m *Mock) buildSite(s site) {
 			for p := 1; p <= 12; p++ {
 				name := fmt.Sprintf("Ethernet%d/%d", card, p)
 				connected := m.rnd.Float64() < 0.85
-				d.ports = append(d.ports, m.newPort(name, 100e9, connected, 0.55, true,
+				d.ports = append(d.ports, m.newPort(name, 100e9, connected, 0.38, true,
 					fmt.Sprintf("%s-leaf%d", s.id, ((card-3)*12+p)%maxInt(s.leaves, 1)+1)))
 			}
 		}
@@ -159,7 +159,7 @@ func (m *Mock) buildSite(s site) {
 		// uplinks to spines, busy and a couple error-prone.
 		for p := 49; p <= 56; p++ {
 			name := fmt.Sprintf("Ethernet%d", p)
-			port := m.newPort(name, 100e9, true, 0.50, true,
+			port := m.newPort(name, 100e9, true, 0.35, true,
 				fmt.Sprintf("%s-spine%d", s.id, (p-49)%maxInt(s.spines, 1)+1))
 			if p == 56 && m.rnd.Float64() < 0.5 {
 				port.errProne = true
@@ -238,7 +238,7 @@ func (m *Mock) setOptics(p *mockPort, connected bool) {
 	if p.hasXcvr {
 		p.vendor = "Arista Networks"
 		p.sn = fmt.Sprintf("XCVR%08d", m.rnd.Intn(100000000))
-		p.domBad = connected && m.rnd.Float64() < 0.04
+		p.domBad = connected && m.rnd.Float64() < 0.012
 	}
 }
 

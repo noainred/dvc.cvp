@@ -23,7 +23,20 @@ type Config struct {
 	Mode        string             `yaml:"mode"`
 	Poll        PollConfig         `yaml:"poll"`
 	Upgrade     UpgradeConfig      `yaml:"upgrade"`
+	Alert       AlertConfig        `yaml:"alert"`
 	DataCenters []DataCenterConfig `yaml:"datacenters"`
+}
+
+// AlertConfig controls threshold alerting and optional webhook notifications.
+// WebhookURL, when set, receives a Slack-compatible JSON payload ({"text":...})
+// on each raised (and, if Resolve is set, cleared) alert.
+type AlertConfig struct {
+	Enabled           bool    `yaml:"enabled"`
+	UtilWarnPct       float64 `yaml:"utilWarnPct"`       // port utilization warning threshold
+	UtilCritPct       float64 `yaml:"utilCritPct"`       // port utilization critical threshold
+	ErrorsPerInterval int64   `yaml:"errorsPerInterval"` // err+discard delta per poll to alert
+	WebhookURL        string  `yaml:"webhookUrl"`
+	Resolve           bool    `yaml:"resolve"` // also notify when an alert clears
 }
 
 // UpgradeConfig controls the portal's self-upgrade feature. The manager checks
@@ -90,8 +103,10 @@ type ProxyConfig struct {
 }
 
 // Default returns a configuration suitable for demo mode with no config file.
+// Alerting is on (UI only; no webhook); self-upgrade stays off (opt-in).
 func Default() *Config {
 	c := &Config{}
+	c.Alert.Enabled = true
 	c.applyDefaults()
 	return c
 }
@@ -140,6 +155,15 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Upgrade.CheckInterval == 0 {
 		c.Upgrade.CheckInterval = 6 * time.Hour
+	}
+	if c.Alert.UtilWarnPct == 0 {
+		c.Alert.UtilWarnPct = 90
+	}
+	if c.Alert.UtilCritPct == 0 {
+		c.Alert.UtilCritPct = 95
+	}
+	if c.Alert.ErrorsPerInterval == 0 {
+		c.Alert.ErrorsPerInterval = 100
 	}
 	for i := range c.DataCenters {
 		if c.DataCenters[i].Proxy.Type == "" {

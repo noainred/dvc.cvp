@@ -6,6 +6,7 @@ import { DataCenterTable } from './components/DataCenterTable'
 import { DeviceTable } from './components/DeviceTable'
 import { DeviceView } from './views/DeviceView'
 import { VersionBadge } from './components/VersionBadge'
+import { AlertsBar } from './components/AlertsPanel'
 
 type Route =
   | { view: 'overview' }
@@ -63,6 +64,13 @@ export default function App() {
 
       <main className="content">
         {!live && <div className="loading">CloudVision 텔레메트리 연결 중…</div>}
+
+        {live && (
+          <AlertsBar
+            alerts={live.alerts}
+            onDevice={(serial) => setRoute({ view: 'device', serial })}
+          />
+        )}
 
         {live && route.view === 'overview' && (
           <Overview

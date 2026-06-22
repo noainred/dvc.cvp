@@ -16,6 +16,15 @@ poll:
   timeout: 8s # 폴링 1회 타임아웃
   historyPoints: 360 # 인터페이스별 보관 샘플 수 (10s × 360 ≈ 1시간)
 
+# 임계치 경보 및 알림. WebhookURL 설정 시 발생/해제 시 Slack 호환 메시지 전송.
+alert:
+  enabled: true
+  utilWarnPct: 90 # 포트 사용률 경고 임계치(%)
+  utilCritPct: 95 # 포트 사용률 심각 임계치(%)
+  errorsPerInterval: 100 # 폴링 1주기당 에러+폐기 증가분이 이 값 이상이면 경보
+  webhookUrl: "" # 예: https://hooks.slack.com/services/XXX/YYY/ZZZ
+  resolve: false # true 면 경보 해제 시에도 알림 전송
+
 # 포탈(앱) 자동 업그레이드. 신규 릴리스를 감지해 서버 바이너리를 자가 교체합니다.
 upgrade:
   enabled: true # 업그레이드 확인/실행 허용

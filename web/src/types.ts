@@ -107,10 +107,25 @@ export interface Sample {
   outBps: number
 }
 
+export interface Alert {
+  key: string
+  severity: 'critical' | 'warning'
+  type: 'util' | 'optic' | 'errors' | 'device' | 'datacenter'
+  dataCenter?: string
+  device?: string
+  hostname?: string
+  interface?: string
+  message: string
+  value?: number
+  since: string
+  active: boolean
+}
+
 export interface LivePayload {
   summary: Summary
   datacenters: DataCenter[]
   devices: Device[]
+  alerts: Alert[]
 }
 
 export interface UpgradeStatus {

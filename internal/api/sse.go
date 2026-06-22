@@ -6,29 +6,32 @@ import (
 	"sync"
 	"time"
 
+	"github.com/noainred/dvc.cvp/internal/alert"
 	"github.com/noainred/dvc.cvp/internal/model"
 	"github.com/noainred/dvc.cvp/internal/store"
 )
 
 // livePayload is pushed to dashboards on every poll cycle. It carries the
-// global summary plus per-data-center and per-device rollups; detailed
-// per-interface data is fetched on demand via REST to keep this small.
+// global summary plus per-data-center and per-device rollups and the active
+// alerts; detailed per-interface data is fetched on demand via REST.
 type livePayload struct {
 	Summary     model.Summary      `json:"summary"`
 	DataCenters []model.DataCenter `json:"datacenters"`
 	Devices     []model.Device     `json:"devices"`
+	Alerts      []model.Alert      `json:"alerts"`
 }
 
 // Hub fans out live snapshots to all connected SSE clients.
 type Hub struct {
 	store   *store.Store
+	alerts  *alert.Engine
 	mu      sync.Mutex
 	clients map[chan []byte]struct{}
 }
 
-// NewHub creates an SSE hub backed by the store.
-func NewHub(s *store.Store) *Hub {
-	return &Hub{store: s, clients: map[chan []byte]struct{}{}}
+// NewHub creates an SSE hub backed by the store and alert engine.
+func NewHub(s *store.Store, a *alert.Engine) *Hub {
+	return &Hub{store: s, alerts: a, clients: map[chan []byte]struct{}{}}
 }
 
 func (h *Hub) payload() []byte {
@@ -36,6 +39,7 @@ func (h *Hub) payload() []byte {
 		Summary:     h.store.Summary(),
 		DataCenters: h.store.DataCenters(),
 		Devices:     h.store.Devices(""),
+		Alerts:      h.alerts.Active(),
 	}
 	data, _ := json.Marshal(p)
 	frame := append([]byte("event: snapshot\ndata: "), data...)

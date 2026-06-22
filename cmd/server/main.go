@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/noainred/dvc.cvp/internal/alert"
 	"github.com/noainred/dvc.cvp/internal/api"
 	"github.com/noainred/dvc.cvp/internal/collector"
 	"github.com/noainred/dvc.cvp/internal/config"
@@ -44,13 +45,20 @@ func main() {
 		log.Fatalf("init provider: %v", err)
 	}
 
+	alerts := alert.New(cfg.Alert, st)
+
 	coll := collector.New(provider, st, cfg.Poll.Interval, cfg.Poll.Timeout)
-	hub := api.NewHub(st)
-	coll.OnUpdate(hub.Broadcast)
+	hub := api.NewHub(st, alerts)
+	// After each poll: evaluate alerts first, then push the snapshot (which
+	// includes the freshly-updated active alerts) to dashboards.
+	coll.OnUpdate(func() {
+		alerts.Evaluate()
+		hub.Broadcast()
+	})
 
 	upMgr := upgrade.New(cfg.Upgrade, version.Get())
 
-	apiH := api.NewAPI(st, cfg.Mode, upMgr)
+	apiH := api.NewAPI(st, cfg.Mode, upMgr, alerts)
 	srv := api.NewServer(cfg.Server.Listen, cfg.Server.WebDir, apiH, hub)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
