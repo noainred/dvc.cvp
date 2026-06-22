@@ -1,0 +1,74 @@
+# dvc.cvp 설정 예시
+# 실제 사용 시 이 파일을 config/config.yaml 로 복사한 뒤 값을 채우세요.
+# (config/config.yaml 은 .gitignore 에 의해 커밋되지 않습니다.)
+
+server:
+  listen: ":8080"
+  webDir: "./web/dist" # 빌드된 React 프론트엔드 경로
+
+# 수집 모드
+#   demo : 합성 데이터(인프라 불필요) — 바로 실행해 데모 확인용
+#   cvp  : 실 CloudVision Portal 인벤토리 + eAPI 실시간 카운터(프록시 경유)
+mode: demo
+
+poll:
+  interval: 10s # 폴링 주기
+  timeout: 8s # 폴링 1회 타임아웃
+  historyPoints: 360 # 인터페이스별 보관 샘플 수 (10s × 360 ≈ 1시간)
+
+# 한국 본사에서 관제하는 데이터센터 목록.
+# 각 사이트는 자체 CloudVision Portal 을 가지며, 본사 수집기는 사이트별
+# SSH 점프호스트(bastion)를 통해 CVP/스위치에 접근합니다.
+datacenters:
+  - id: kr-seoul-hq
+    name: "서울 본사 DC"
+    region: KR
+    city: Seoul
+    cvp:
+      url: "https://cvp.seoul.example.com"
+      # 인증: 서비스 계정 토큰 또는 username/password 중 하나
+      token: ""
+      username: "monitor"
+      password: "CHANGE_ME"
+      insecureSkipVerify: true
+      # 스위치 EOS eAPI 자격증명(실시간 인터페이스 카운터 수집용)
+      deviceUsername: "monitor"
+      devicePassword: "CHANGE_ME"
+    proxy:
+      type: ssh # direct | ssh
+      jumpHost: "bastion.seoul.example.com:22"
+      user: "netops"
+      keyFile: "~/.ssh/id_ed25519"
+      # password: ""                        # keyFile 대신 비밀번호 인증 시
+      # knownHosts: "~/.ssh/known_hosts"     # 미설정 시 호스트키 검증 생략(데모용)
+
+  - id: us-ashburn
+    name: "Ashburn US-East"
+    region: AMER
+    city: Ashburn
+    cvp:
+      url: "https://cvp.ashburn.example.com"
+      token: "eyJhbGciOiJSUzI1NiIs..." # 서비스 계정 토큰 사용 예시
+      insecureSkipVerify: true
+      deviceUsername: "monitor"
+      devicePassword: "CHANGE_ME"
+    proxy:
+      type: ssh
+      jumpHost: "10.20.0.10:22"
+      user: "netops"
+      keyFile: "~/.ssh/id_ed25519"
+
+  # 본사 로컬 등 프록시가 불필요한 사이트는 type: direct 사용
+  # - id: kr-local
+  #   name: "본사 로컬"
+  #   region: KR
+  #   city: Seoul
+  #   cvp:
+  #     url: "https://cvp.local"
+  #     username: "monitor"
+  #     password: "CHANGE_ME"
+  #     insecureSkipVerify: true
+  #     deviceUsername: "monitor"
+  #     devicePassword: "CHANGE_ME"
+  #   proxy:
+  #     type: direct

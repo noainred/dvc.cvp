@@ -1,0 +1,90 @@
+import { useEffect, useRef, useState } from 'react'
+import type { Interface, LivePayload, Sample } from './types'
+
+export async function getJSON<T>(url: string): Promise<T> {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`)
+  return (await res.json()) as T
+}
+
+export const api = {
+  interfaces: (serial: string) =>
+    getJSON<Interface[]>(`/api/devices/${encodeURIComponent(serial)}/interfaces`),
+  deviceHistory: (serial: string) =>
+    getJSON<Sample[]>(`/api/devices/${encodeURIComponent(serial)}/history`),
+  interfaceHistory: (serial: string, name: string) =>
+    getJSON<Sample[]>(
+      `/api/devices/${encodeURIComponent(serial)}/interface-history?name=${encodeURIComponent(name)}`
+    )
+}
+
+// useLive subscribes to the SSE stream and returns the latest fleet snapshot
+// plus a connection flag. It transparently reconnects on disconnect.
+export function useLive(): { live: LivePayload | null; connected: boolean } {
+  const [live, setLive] = useState<LivePayload | null>(null)
+  const [connected, setConnected] = useState(false)
+  const esRef = useRef<EventSource | null>(null)
+
+  useEffect(() => {
+    let stopped = false
+    let retry: ReturnType<typeof setTimeout>
+
+    const connect = () => {
+      if (stopped) return
+      const es = new EventSource('/api/stream')
+      esRef.current = es
+      es.addEventListener('snapshot', (ev) => {
+        try {
+          setLive(JSON.parse((ev as MessageEvent).data))
+          setConnected(true)
+        } catch {
+          /* ignore malformed frame */
+        }
+      })
+      es.onopen = () => setConnected(true)
+      es.onerror = () => {
+        setConnected(false)
+        es.close()
+        retry = setTimeout(connect, 3000)
+      }
+    }
+    connect()
+
+    return () => {
+      stopped = true
+      clearTimeout(retry)
+      esRef.current?.close()
+    }
+  }, [])
+
+  return { live, connected }
+}
+
+// usePolling re-runs an async loader on an interval and returns its result.
+export function usePolling<T>(loader: () => Promise<T>, deps: unknown[], intervalMs = 5000) {
+  const [data, setData] = useState<T | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    const run = () => {
+      loader()
+        .then((d) => {
+          if (active) {
+            setData(d)
+            setError(null)
+          }
+        })
+        .catch((e) => active && setError(String(e)))
+    }
+    run()
+    const id = setInterval(run, intervalMs)
+    return () => {
+      active = false
+      clearInterval(id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+
+  return { data, error }
+}
