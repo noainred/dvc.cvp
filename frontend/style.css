@@ -159,6 +159,8 @@ select, input[type="text"], input[type="number"], input:not([type]) {
   position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
   background: rgba(8,12,20,.92); backdrop-filter: blur(3px);
 }
+/* hidden 속성이 display:flex 보다 우선하도록 (이게 없으면 로그인 창이 안 사라짐) */
+.login-overlay[hidden] { display: none !important; }
 .login-box {
   background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
   padding: 28px; width: 340px; max-width: 92vw; text-align: center;
