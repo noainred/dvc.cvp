@@ -1,0 +1,18 @@
+[Unit]
+Description=HomeLab Monitor (uptime / IP / Synology / router / speedtest)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 설치 위치에 맞게 수정하세요.
+User=pi
+WorkingDirectory=/home/pi/homelab-monitor
+ExecStart=/home/pi/homelab-monitor/.venv/bin/python run.py
+Restart=on-failure
+RestartSec=5
+# 선택: 설정 파일 경로 지정
+# Environment=HOMELAB_CONFIG=/home/pi/homelab-monitor/config.yaml
+
+[Install]
+WantedBy=multi-user.target
