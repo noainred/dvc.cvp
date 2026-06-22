@@ -21,9 +21,13 @@ _SEED_MAP = {
     "monitoring": "monitoring",
     "retention": "retention",
     "speedtest": "speedtest",
+    "scan": "scan",
     "synology": "synology",
     "router": "router",
     "update": "update",
+    "tailscale": "tailscale",
+    "security": "security",
+    "fail2ban": "fail2ban",
 }
 
 

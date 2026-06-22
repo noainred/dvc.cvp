@@ -142,10 +142,39 @@ class SpeedTest(Base):
     error: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
+class SynologyNas(Base):
+    """A Synology NAS unit. Multiple units are supported."""
+
+    __tablename__ = "synology_nas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    host: Mapped[str] = mapped_column(String(255), nullable=False)
+    port: Mapped[int] = mapped_column(Integer, default=5001)
+    https: Mapped[bool] = mapped_column(Boolean, default=True)
+    verify_ssl: Mapped[bool] = mapped_column(Boolean, default=False)
+    username: Mapped[str] = mapped_column(String(120), default="")
+    password: Mapped[str] = mapped_column(String(255), default="")
+    # 2-step verification: a transient OTP code (consumed on next login) and the
+    # resulting trusted-device token reused for subsequent unattended logins.
+    otp_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    device_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+    # Live state (updated each poll)
+    last_connected: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    last_polled: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    last_detail: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
+
+
 class SynologyMetric(Base):
     __tablename__ = "synology_metrics"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nas_id: Mapped[int | None] = mapped_column(
+        ForeignKey("synology_nas.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     ts: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, index=True)
     cpu_load: Mapped[float | None] = mapped_column(Float, nullable=True)
     mem_usage: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -153,6 +182,72 @@ class SynologyMetric(Base):
     uptime_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # JSON blob of volume info / extra details
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class DiscoveredHost(Base):
+    """A host found by the IP scanner. One row per IP (inventory)."""
+
+    __tablename__ = "discovered_hosts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ip: Mapped[str] = mapped_column(String(45), unique=True, index=True)
+    mac: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    vendor: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    first_seen: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+    last_seen: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+    last_up: Mapped[bool] = mapped_column(Boolean, default=True)
+    times_seen: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class ScanRun(Base):
+    """One IP scan execution - kept as a lightweight history of scans."""
+
+    __tablename__ = "scan_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ts: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+    subnet: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    up: Mapped[int] = mapped_column(Integer, default=0)
+    new: Mapped[int] = mapped_column(Integer, default=0)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class User(Base):
+    """A portal user that logs in with a TOTP (Google Authenticator) code."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    totp_secret: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Becomes True only after the user proves they scanned the QR (first code).
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+    last_login: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class LoginAttempt(Base):
+    __tablename__ = "login_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ip: Mapped[str] = mapped_column(String(45), index=True)
+    username: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    ts: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+    success: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class IpBan(Base):
+    __tablename__ = "ip_bans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ip: Mapped[str] = mapped_column(String(45), unique=True, index=True)
+    reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    source: Mapped[str] = mapped_column(String(20), default="portal")  # portal | manual
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+    expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)  # None = 영구
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Setting(Base):

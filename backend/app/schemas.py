@@ -64,5 +64,10 @@ class SettingsUpdate(BaseModel):
     monitoring: Optional[Dict[str, Any]] = None
     retention: Optional[Dict[str, Any]] = None
     speedtest: Optional[Dict[str, Any]] = None
+    scan: Optional[Dict[str, Any]] = None
     synology: Optional[Dict[str, Any]] = None
     router: Optional[Dict[str, Any]] = None
+    update: Optional[Dict[str, Any]] = None
+    security: Optional[Dict[str, Any]] = None
+    fail2ban: Optional[Dict[str, Any]] = None
+    tailscale: Optional[Dict[str, Any]] = None

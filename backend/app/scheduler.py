@@ -16,13 +16,14 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import select
 
 from .database import session_scope
-from .models import Device, SpeedTest, SynologyMetric
+from .models import Device, SpeedTest
 from .monitors import ping as ping_mod
 from .monitors import router as router_mod
 from .monitors import speedtest as speedtest_mod
-from .monitors import synology as synology_mod
 from .services import rollup as rollup_svc
+from .services import scan as scan_svc
 from .services import settings as settings_svc
+from .services import synology as synology_svc
 from .services import system as system_svc
 from .services import uptime as uptime_svc
 
@@ -109,29 +110,21 @@ def run_speedtest_now(method: str = "auto") -> dict:
 
 
 def job_synology() -> None:
-    import json
+    """Poll every enabled Synology NAS and store a metric for each."""
+    with session_scope() as db:
+        synology_svc.poll_all(db)
 
+
+def job_ip_scan() -> None:
+    """Scan the configured subnet and record discovered hosts / live state."""
     with session_scope() as db:
-        cfg = settings_svc.get(db, "synology")
-    if not cfg.get("enabled") or not cfg.get("host"):
-        return
-    try:
-        status = synology_mod.get_status(cfg)
-    except Exception as exc:  # pragma: no cover - network dependent
-        log.warning("Synology poll failed: %s", exc)
-        return
-    if not status.get("connected"):
-        return
-    with session_scope() as db:
-        db.add(
-            SynologyMetric(
-                cpu_load=status.get("cpu_load"),
-                mem_usage=status.get("mem_usage"),
-                temp_c=status.get("temperature_c"),
-                uptime_s=status.get("uptime_s"),
-                detail=json.dumps({"volumes": status.get("volumes", [])}),
-            )
-        )
+        cfg = settings_svc.get(db, "scan")
+        if not cfg.get("enabled", True):
+            return
+        try:
+            scan_svc.run_scan(db)
+        except Exception as exc:  # pragma: no cover - network dependent
+            log.warning("IP scan failed: %s", exc)
 
 
 def job_rollup() -> None:
@@ -186,6 +179,7 @@ def job_reconcile() -> None:
         mon = settings_svc.get(db, "monitoring")
         spd = settings_svc.get(db, "speedtest")
         upd = settings_svc.get(db, "update")
+        scn = settings_svc.get(db, "scan")
 
     monitor_secs = max(10, int(mon.get("interval_seconds", 60)))
     if _current_intervals.get("monitor") != monitor_secs:
@@ -211,6 +205,22 @@ def job_reconcile() -> None:
         _current_intervals["update"] = upd_hours
         log.info("Rescheduled auto-update check to every %dh", upd_hours)
 
+    scan_mins = max(1, int(scn.get("interval_minutes", 10)))
+    if _current_intervals.get("scan") != scan_mins:
+        if scn.get("enabled", True):
+            scheduler.reschedule_job("ipscan", trigger="interval", minutes=scan_mins)
+            try:
+                scheduler.resume_job("ipscan")
+            except Exception:
+                pass
+        else:
+            try:
+                scheduler.pause_job("ipscan")
+            except Exception:
+                pass
+        _current_intervals["scan"] = scan_mins
+        log.info("Rescheduled IP scan to every %d min (enabled=%s)", scan_mins, scn.get("enabled", True))
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -221,11 +231,13 @@ def start() -> None:
         spd = settings_svc.get(db, "speedtest")
         syn = settings_svc.get(db, "synology")
         upd = settings_svc.get(db, "update")
+        scn = settings_svc.get(db, "scan")
 
     monitor_secs = max(10, int(mon.get("interval_seconds", 60)))
     speed_mins = int(spd.get("interval_minutes", 360))
     syn_secs = int(syn.get("poll_seconds", 300))
     upd_hours = max(1, int(upd.get("check_interval_hours", 24)))
+    scan_mins = max(1, int(scn.get("interval_minutes", 10)))
 
     scheduler.add_job(job_monitor, "interval", seconds=monitor_secs, id="monitor",
                       max_instances=1, coalesce=True, next_run_time=dt.datetime.utcnow())
@@ -241,15 +253,22 @@ def start() -> None:
     scheduler.add_job(job_auto_upgrade, "interval", hours=upd_hours, id="autoupgrade",
                       max_instances=1, coalesce=True,
                       next_run_time=dt.datetime.utcnow() + dt.timedelta(minutes=2))
+    scheduler.add_job(job_ip_scan, "interval", minutes=scan_mins, id="ipscan",
+                      max_instances=1, coalesce=True,
+                      next_run_time=dt.datetime.utcnow() + dt.timedelta(seconds=20))
     scheduler.add_job(job_reconcile, "interval", seconds=30, id="reconcile",
                       max_instances=1, coalesce=True)
 
     if speed_mins <= 0:
         scheduler.pause_job("speedtest")
+    if not scn.get("enabled", True):
+        scheduler.pause_job("ipscan")
 
-    _current_intervals.update({"monitor": monitor_secs, "speedtest": speed_mins, "update": upd_hours})
+    _current_intervals.update(
+        {"monitor": monitor_secs, "speedtest": speed_mins, "update": upd_hours, "scan": scan_mins}
+    )
     scheduler.start()
-    log.info("Scheduler started (monitor=%ds, speedtest=%dmin)", monitor_secs, speed_mins)
+    log.info("Scheduler started (monitor=%ds, speedtest=%dmin, scan=%dmin)", monitor_secs, speed_mins, scan_mins)
 
 
 def shutdown() -> None:

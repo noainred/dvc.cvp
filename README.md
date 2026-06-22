@@ -14,13 +14,16 @@
 | 기능 | 설명 |
 | --- | --- |
 | **장비 업타임/IP 관리** | 모든 장비를 주기적으로 핑(ICMP)·TCP·HTTP 체크하고 가동률을 기록 |
+| **장비 상태표 + 분/시간/날짜 조회** | 모든 장비의 IP 사용여부(live)를 표로 보고, IP 클릭 시 **분·시간·날짜** 단위로 업타임 조회 |
+| **IP 스캔 (10분 주기)** | 서브넷을 스캔해 살아있는 호스트(IP/MAC/호스트명)를 발견·기록, 클릭 한 번으로 모니터링 장비 등록 |
 | **장기 데이터 보관 (3년+)** | 원본 → 시간별 → **일별 집계(영구)** + **장애 이벤트 로그(영구)** 로 다운샘플링하여 DB를 작게 유지하면서 수년치 조회 가능 |
-| **업타임 그래프/조회** | 24시간·7일·30일·1년·3년 범위로 가동률·지연시간·장애 이력 조회 |
 | **인터넷 속도 측정** | 주기적으로 다운로드/업로드/핑을 측정하여 기록·그래프화 (수동 측정 버튼도 제공) |
-| **시놀로지 관리** | DSM API로 CPU/메모리/온도/가동시간/볼륨 사용량 모니터링 |
+| **시놀로지 다중 NAS 관리** | 여러 대의 NAS를 웹에서 등록·관리, CPU/메모리/온도/볼륨 모니터링, **2단계 인증(OTP)** 지원 |
 | **공유기 관리** | 연결 상태·지연 + (SNMP 사용 시) 가동시간·WAN 트래픽, 관리 페이지 바로가기 |
-| **웹 UI에서 모든 설정** | 장비 추가/수정/삭제, 측정 주기, 보관 기간, 시놀로지/공유기 연결을 브라우저에서 관리 |
+| **어디서나 접속 (Tailscale)** | Tailscale 연결 상태·접속 주소를 표시해 외부에서 안전하게 접속 |
+| **로그인 (Google OTP)** | TOTP(Google Authenticator) 전용 로그인, **3회 실패 시 IP 차단**(정책 웹 제어), OS fail2ban 연동 |
 | **버전 표시 / 자동 업그레이드** | 헤더·설정에 현재 버전(앱 버전+git 커밋) 표시, 웹에서 업데이트 확인·즉시 업그레이드, 주기적 자동 업데이트(옵션) |
+| **웹 UI에서 모든 설정** | 장비·NAS·스캔·보안·측정주기·보관기간 등을 브라우저에서 관리 |
 
 ---
 
@@ -143,6 +146,54 @@ CLI로 업그레이드하려면: `bash deploy/upgrade.sh`
 
 ---
 
+## 🔍 IP 스캔
+
+서브넷(예: `192.168.0.0/24`)을 **10분마다** 스캔해 살아있는 호스트를 찾아 IP·MAC·
+호스트명과 함께 기록합니다(미설정 시 라즈베리파이의 로컬 /24를 자동 감지). 발견한
+호스트는 [IP 스캔] 탭에서 보고, **장비로 추가** 버튼으로 모니터링 대상에 바로 등록할
+수 있습니다. MAC은 핑 후 커널 ARP 테이블(`ip neigh`)에서 읽으므로 root 권한이
+필요 없습니다.
+
+## 🔐 로그인 & 접속 차단 (Google OTP)
+
+- **로그인**: 사용자 이름 + **TOTP(Google Authenticator) 6자리 코드**로만 로그인
+  합니다(비밀번호 없음). [보안] 탭에서 계정을 만들고 QR을 스캔해 인증한 뒤
+  "로그인 요구"를 켜세요. (계정이 없으면 켤 수 없어 잠김을 방지합니다.)
+- **무차별 대입 차단(앱)**: 한 IP가 정해진 횟수(기본 3회) 이상 실패하면 해당 IP를
+  지정 시간(기본 15분) 동안 차단합니다. 임계값·차단시간·집계창은 [보안] 탭에서 제어,
+  차단 목록은 조회/해제할 수 있습니다.
+- **OS 차단(fail2ban)**: SSH 등 OS 레벨 차단은 fail2ban과 연동합니다.
+  설치: `sudo apt install fail2ban`. [보안] 탭에서 정책(maxretry/bantime/findtime)을
+  저장하면 `/etc/fail2ban/jail.d/homelab-monitor.local`을 쓰고 reload를 시도합니다.
+
+  > fail2ban 제어는 root 권한이 필요합니다. 앱(예: `pi` 사용자)에서 제어하려면
+  > 아래처럼 passwordless sudo를 허용하세요(`sudo visudo`):
+  > ```
+  > pi ALL=(root) NOPASSWD: /usr/bin/fail2ban-client, /usr/bin/tee /etc/fail2ban/jail.d/homelab-monitor.local
+  > ```
+  > 권한이 없으면 적용할 정책 내용을 화면에 보여주어 수동 적용할 수 있게 합니다.
+
+## 🌐 어디서나 접속 (Tailscale)
+
+라즈베리파이에 Tailscale을 설치하면 외부에서도 모니터에 접속할 수 있습니다.
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+```
+
+[원격접속] 탭에서 연결 상태와 **어디서나 접속 주소**(`http://100.x.y.z:8080`,
+MagicDNS 이름)를 확인할 수 있습니다.
+
+## 🗄️ 시놀로지 2단계 인증(OTP)
+
+NAS 계정에 2단계 인증이 켜져 있으면 일반 로그인이 거부됩니다(코드 403). [시놀로지] 탭에서
+NAS를 등록할 때(또는 수정) **OTP 코드**를 1회 입력하면, 앱이 신뢰기기 토큰(device token)을
+받아 저장하고 이후에는 OTP 없이 자동 폴링합니다. 2단계 인증을 쓰지 않는 전용 계정을
+만들어도 됩니다.
+
+---
+
 ## 🔌 주요 API
 
 | 메서드 | 경로 | 설명 |
@@ -159,6 +210,14 @@ CLI로 업그레이드하려면: `bash deploy/upgrade.sh`
 | GET | `/api/system/version` | 현재 버전/커밋 |
 | GET | `/api/system/update-check` | 업데이트 확인 |
 | POST | `/api/system/upgrade` | 즉시 업그레이드(+재시작) |
+| GET | `/api/devices/{id}/uptime?granularity=minute\|hour\|day` | 분/시간/날짜 단위 업타임 |
+| GET/POST | `/api/scan/hosts` · `/api/scan/run` | 발견 호스트 / 즉시 스캔 |
+| GET/POST | `/api/synology/nas` | NAS 목록 / 추가 (다중) |
+| GET | `/api/synology/nas/{id}/status` | NAS 실시간 상태 |
+| GET | `/api/tailscale/status` | Tailscale 상태/접속 주소 |
+| GET/POST | `/api/auth/state` · `/api/auth/login` | 인증 상태 / TOTP 로그인 |
+| GET/POST/DELETE | `/api/auth/users` · `/api/auth/bans` | 계정 / IP 차단 관리 |
+| GET/PUT | `/api/security/fail2ban/status` · `/policy` | fail2ban 상태/정책 |
 
 대화형 API 문서: `http://<IP>:8080/docs`
 

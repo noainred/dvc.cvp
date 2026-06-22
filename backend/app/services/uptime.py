@@ -69,23 +69,36 @@ def _pick_source(seconds: int) -> str:
     return "daily"
 
 
+# Explicit granularity (분/시간/날짜) -> data source + default window.
+GRAN_SOURCE = {"minute": "raw", "hour": "hourly", "day": "daily"}
+GRAN_DEFAULT_RANGE = {"minute": "24h", "hour": "7d", "day": "90d"}
+
+
 def uptime_summary(
     db: Session,
     device_id: int,
     range_key: str = "24h",
     start: Optional[dt.datetime] = None,
     end: Optional[dt.datetime] = None,
+    granularity: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Return uptime percentage, average latency and a time series."""
+    """Return uptime percentage, average latency and a time series.
+
+    ``granularity`` (``minute`` | ``hour`` | ``day``) forces the data source;
+    when given without an explicit range it picks a sensible default window.
+    """
     now = _utcnow()
+    if granularity and not (start and end) and not range_key:
+        range_key = GRAN_DEFAULT_RANGE.get(granularity, "24h")
+
     if start and end:
         seconds = int((end - start).total_seconds())
-        source = _pick_source(seconds)
     else:
-        seconds = RANGE_SECONDS.get(range_key, 86400)
+        seconds = RANGE_SECONDS.get(range_key or "24h", 86400)
         end = now
         start = now - dt.timedelta(seconds=seconds)
-        source = _pick_source(seconds)
+
+    source = GRAN_SOURCE.get(granularity) if granularity else _pick_source(seconds)
 
     if source == "raw":
         return _summary_raw(db, device_id, start, end)

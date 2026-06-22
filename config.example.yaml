@@ -52,16 +52,48 @@ update:
   auto_apply: false           # true 면 새 버전 발견 시 자동으로 설치+재시작
   allow_manual: true          # 웹에서 "지금 업그레이드" 버튼 허용
 
-# --- 시놀로지 (선택) ---
-synology:
+# --- IP 스캔 ---
+scan:
+  enabled: true
+  subnet: ""                  # 비우면 라즈베리파이의 로컬 /24 자동 감지 (예: "192.168.0.0/24")
+  interval_minutes: 10        # 10분마다 자동 스캔
+  method: "icmp"              # icmp | tcp | http
+  timeout_seconds: 1
+  concurrency: 64
+
+# --- 보안 / 로그인 (Google OTP) ---
+security:
+  auth_enabled: false         # 로그인 요구 (켜기 전 웹 [보안]에서 계정을 먼저 등록·인증)
+  max_attempts: 3             # 이 횟수 이상 실패 시 IP 차단
+  ban_minutes: 15             # 차단 시간(분), 0=영구
+  window_minutes: 10          # 실패 횟수 집계 시간 창
+
+# --- OS fail2ban (선택, SSH 등) ---
+fail2ban:
   enabled: false
-  host: "192.168.0.10"
-  port: 5001
-  https: true
-  verify_ssl: false           # 자체 서명 인증서면 false
-  username: ""
-  password: ""
-  poll_seconds: 300           # 시놀로지 상태 폴링 주기
+  jail: "sshd"
+  maxretry: 3
+  bantime_minutes: 15
+  findtime_minutes: 10
+
+# --- 어디서나 접속 (Tailscale) ---
+tailscale:
+  enabled: true               # 탭 표시 여부 (상태는 자동 감지)
+
+# --- 시놀로지 ---
+synology:
+  poll_seconds: 300           # 전체 NAS 상태 폴링 주기
+
+# 여러 대의 NAS를 첫 실행 시 등록 (이후 웹 [시놀로지]에서 관리)
+# 2단계 인증(OTP) 계정은 등록 후 웹에서 OTP 코드를 1회 입력하면 신뢰기기로 등록됩니다.
+synology_nas: []
+#  - name: "거실 NAS"
+#    host: "192.168.0.10"
+#    port: 5001
+#    https: true
+#    verify_ssl: false
+#    username: "monitor"
+#    password: ""
 
 # --- 공유기 (선택) ---
 router:

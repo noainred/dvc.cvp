@@ -145,3 +145,30 @@ select, input[type="text"], input[type="number"], input:not([type]) {
 
 .progress { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; margin-top: 6px; }
 .progress > span { display: block; height: 100%; background: var(--accent); }
+
+/* topbar right cluster */
+.topright { display: flex; align-items: center; gap: 8px; }
+
+/* clickable status rows / IP links */
+.data-table tr.clickable { cursor: pointer; }
+.data-table tr.clickable:hover { background: var(--panel-2); }
+.iplink { color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+/* login overlay */
+.login-overlay {
+  position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+  background: rgba(8,12,20,.92); backdrop-filter: blur(3px);
+}
+.login-box {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+  padding: 28px; width: 340px; max-width: 92vw; text-align: center;
+}
+.login-logo { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.login-box form { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.login-box input { width: 100%; text-align: center; }
+.login-msg { color: var(--down); margin-top: 12px; min-height: 18px; font-size: 13px; }
+
+/* QR / account setup */
+.qr-box { background: #fff; padding: 12px; border-radius: 10px; display: inline-block; margin: 6px auto; }
+.qr-box svg { width: 180px; height: 180px; display: block; }
+code { background: var(--panel-2); padding: 2px 6px; border-radius: 5px; font-size: 12px; }

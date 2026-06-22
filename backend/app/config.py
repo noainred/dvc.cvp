@@ -25,22 +25,39 @@ DEFAULTS: Dict[str, Any] = {
     "monitoring": {"interval_seconds": 60, "concurrency": 16, "timeout_seconds": 2},
     "retention": {"raw_days": 90, "hourly_days": 400},
     "speedtest": {"enabled": True, "interval_minutes": 360, "method": "auto"},
+    "scan": {
+        "enabled": True,
+        "subnet": "",  # 빈 값이면 라즈베리파이의 로컬 /24 자동 감지
+        "interval_minutes": 10,
+        "method": "icmp",
+        "timeout_seconds": 1,
+        "concurrency": 64,
+    },
     "update": {
         "auto_check": True,
         "check_interval_hours": 24,
         "auto_apply": False,
         "allow_manual": True,
     },
-    "synology": {
-        "enabled": False,
-        "host": "",
-        "port": 5001,
-        "https": True,
-        "verify_ssl": False,
-        "username": "",
-        "password": "",
-        "poll_seconds": 300,
+    "security": {
+        "auth_enabled": False,   # 로그인(TOTP) 요구 여부
+        "max_attempts": 3,       # 이 횟수 이상 실패하면 IP 차단
+        "ban_minutes": 15,       # 차단 지속 시간(분), 0이면 영구
+        "window_minutes": 10,    # 실패 횟수를 세는 시간 창(분)
     },
+    "fail2ban": {
+        "enabled": False,        # 라즈베리파이 OS(SSH 등) fail2ban 제어
+        "jail": "sshd",
+        "maxretry": 3,
+        "bantime_minutes": 15,
+        "findtime_minutes": 10,
+    },
+    # Per-NAS connection details live in the synology_nas table (multi-NAS).
+    # This only holds the global polling interval.
+    "synology": {"poll_seconds": 300},
+    # Initial NAS units to seed on first run (afterwards managed in the web UI).
+    "synology_nas": [],
+    "tailscale": {"enabled": True},
     "router": {
         "enabled": False,
         "host": "",
