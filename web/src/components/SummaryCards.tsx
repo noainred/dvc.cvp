@@ -14,15 +14,20 @@ export function SummaryCards({ s }: { s: Summary }) {
         <div className="card-label">포트 사용 현황 ({s.portTotal.toLocaleString()})</div>
         <div className="usage-bar">
           <span className="seg used" style={{ width: `${seg(s.portUsed, s.portTotal)}%` }} />
-          <span className="seg free" style={{ width: `${seg(s.portFree, s.portTotal)}%` }} />
+          <span className="seg freeready" style={{ width: `${seg(s.portFreeReady, s.portTotal)}%` }} />
+          <span className="seg free" style={{ width: `${seg(s.portFreeEmpty, s.portTotal)}%` }} />
           <span className="seg disabled" style={{ width: `${seg(s.portDisabled, s.portTotal)}%` }} />
           <span className="seg error" style={{ width: `${seg(s.portError, s.portTotal)}%` }} />
         </div>
         <div className="usage-legend">
           <span><b className="dot used" />사용중 {s.portUsed.toLocaleString()} ({portUsedPct.toFixed(0)}%)</span>
-          <span><b className="dot free" />미사용 {s.portFree.toLocaleString()}</span>
+          <span><b className="dot freeready" />미사용·모듈O {s.portFreeReady.toLocaleString()}</span>
+          <span><b className="dot free" />미사용·모듈X {s.portFreeEmpty.toLocaleString()}</span>
           <span><b className="dot disabled" />비활성 {s.portDisabled.toLocaleString()}</span>
           <span><b className="dot error" />오류 {s.portError.toLocaleString()}</span>
+          {s.opticAlarms > 0 && (
+            <span><b className="dot alarm" />광경보 {s.opticAlarms.toLocaleString()}</span>
+          )}
         </div>
       </div>
     </div>

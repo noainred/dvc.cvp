@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Device, Interface } from '../types'
 import { api, usePolling } from '../api'
-import { bps, pct, speed, stateLabel, statusColor, statusLabel, uptime } from '../format'
+import { bps, dbm, opticAlarmLabel, pct, speed, stateLabel, statusColor, statusLabel, uptime } from '../format'
 import { PortGrid } from '../components/PortGrid'
 import { TrafficChart } from '../components/TrafficChart'
 
@@ -81,6 +81,25 @@ function PortDetail({ serial, iface, onClose }: { serial: string; iface: Interfa
         <PortStat label="인입 / 인출" value={`${bps(iface.inBps)} / ${bps(iface.outBps)}`} />
         <PortStat label="오류 (In/Out)" value={`${iface.inErrors} / ${iface.outErrors}`} />
         <PortStat label="폐기 (In/Out)" value={`${iface.inDiscards} / ${iface.outDiscards}`} />
+        {(iface.hasTransceiver || iface.mediaType) && (
+          <PortStat
+            label="트랜시버(모듈)"
+            value={`${iface.hasTransceiver ? '장착' : '없음'}${iface.mediaType ? ` · ${iface.mediaType}` : ''}`}
+          />
+        )}
+        {iface.xcvrPart && (
+          <PortStat
+            label="모듈 P/N"
+            value={`${iface.xcvrPart}${iface.xcvrSerial ? ` (${iface.xcvrSerial})` : ''}`}
+          />
+        )}
+        {iface.domValid && (
+          <PortStat label="광 Rx / Tx" value={`${dbm(iface.rxPowerDbm)} / ${dbm(iface.txPowerDbm)}`} />
+        )}
+        {iface.domValid && (
+          <PortStat label="온도 / 전압" value={`${iface.tempC?.toFixed(1)}℃ / ${iface.voltageV?.toFixed(2)}V`} />
+        )}
+        {iface.opticAlarm && <PortStat label="⚠ 광 경보" value={opticAlarmLabel(iface.opticAlarm)} />}
         {iface.neighbor && <PortStat label="이웃(LLDP)" value={iface.neighbor} />}
       </div>
       <TrafficChart samples={hist ?? []} height={180} />

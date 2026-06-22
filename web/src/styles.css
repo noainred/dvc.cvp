@@ -82,9 +82,11 @@ h3 { margin: 0 0 14px; font-size: 15px; color: #cbd5e1; }
 .usage-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; margin: 12px 0 8px; background: #0b1220; }
 .usage-bar .seg { height: 100%; }
 .seg.used, .dot.used { background: var(--used); }
+.seg.freeready, .dot.freeready { background: #0e7490; }
 .seg.free, .dot.free { background: var(--free); }
 .seg.disabled, .dot.disabled { background: var(--disabled); }
 .seg.error, .dot.error { background: var(--error); }
+.dot.alarm { background: #f59e0b; }
 .usage-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); }
 .usage-legend b.dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
 
@@ -140,7 +142,9 @@ h3 { margin: 0 0 14px; font-size: 15px; color: #cbd5e1; }
   padding: 0; transition: transform 0.08s; }
 .port-cell:hover { transform: scale(1.12); outline: 1px solid #fff6; z-index: 2; }
 .port-cell.selected { outline: 2px solid #fff; z-index: 3; }
+.port-cell.alarm { box-shadow: 0 0 0 2px #f59e0b inset; }
 .port-num { pointer-events: none; }
+.chip-swatch.ring { box-shadow: 0 0 0 2px #f59e0b inset; }
 
 .port-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
 .port-stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }

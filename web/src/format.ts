@@ -68,19 +68,38 @@ export function utilColor(util: number): string {
 }
 
 // portStateColor colors a port square by its state, using the utilization
-// heatmap for ports that are in use.
-export function portStateColor(state: string, util: number): string {
+// heatmap for ports that are in use. For free ports, hasTransceiver=true (an
+// optic is installed and the port is ready to use) gets a distinct teal shade.
+export function portStateColor(state: string, util: number, hasTransceiver = false): string {
   switch (state) {
     case 'used':
       return utilColor(util)
     case 'free':
-      return '#334155'
+      return hasTransceiver ? '#0e7490' : '#334155' // teal = optic ready, slate = empty
     case 'disabled':
       return '#1e293b'
     case 'error':
       return '#ef4444'
     default:
       return '#475569'
+  }
+}
+
+// dbm formats an optical power reading.
+export function dbm(v?: number): string {
+  return v == null ? '-' : `${v.toFixed(1)} dBm`
+}
+
+export function opticAlarmLabel(a?: string): string {
+  switch (a) {
+    case 'low-rx':
+      return 'Rx 광량 부족'
+    case 'low-tx':
+      return 'Tx 광량 부족'
+    case 'high-temp':
+      return '고온'
+    default:
+      return a || ''
   }
 }
 

@@ -233,10 +233,18 @@ func (s *Store) Summary() model.Summary {
 				sum.PortUsed++
 			case model.PortFree:
 				sum.PortFree++
+				if ifc.HasTransceiver {
+					sum.PortFreeReady++
+				} else {
+					sum.PortFreeEmpty++
+				}
 			case model.PortDisabled:
 				sum.PortDisabled++
 			case model.PortError:
 				sum.PortError++
+			}
+			if ifc.OpticAlarm != "" {
+				sum.OpticAlarms++
 			}
 		}
 	}

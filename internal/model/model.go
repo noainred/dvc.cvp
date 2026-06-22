@@ -33,45 +33,49 @@ const (
 // DataCenter is a monitored site. Each site is reached through its own proxy
 // (typically an SSH jump host) and has its own CloudVision Portal endpoint.
 type DataCenter struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Region      string    `json:"region"`
-	City        string    `json:"city"`
-	ProxyType   string    `json:"proxyType"`
-	Status      string    `json:"status"`
-	DeviceCount int       `json:"deviceCount"`
-	DeviceUp    int       `json:"deviceUp"`
-	PortTotal   int       `json:"portTotal"`
-	PortUsed    int       `json:"portUsed"`
-	PortFree    int       `json:"portFree"`
-	InBps       float64   `json:"inBps"`
-	OutBps      float64   `json:"outBps"`
-	MaxUtilPct  float64   `json:"maxUtilPct"`
-	LastPoll    time.Time `json:"lastPoll"`
-	Error       string    `json:"error,omitempty"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Region        string    `json:"region"`
+	City          string    `json:"city"`
+	ProxyType     string    `json:"proxyType"`
+	Status        string    `json:"status"`
+	DeviceCount   int       `json:"deviceCount"`
+	DeviceUp      int       `json:"deviceUp"`
+	PortTotal     int       `json:"portTotal"`
+	PortUsed      int       `json:"portUsed"`
+	PortFree      int       `json:"portFree"`
+	PortFreeReady int       `json:"portFreeReady"` // free ports with an optic installed
+	InBps         float64   `json:"inBps"`
+	OutBps        float64   `json:"outBps"`
+	MaxUtilPct    float64   `json:"maxUtilPct"`
+	OpticAlarms   int       `json:"opticAlarms"`
+	LastPoll      time.Time `json:"lastPoll"`
+	Error         string    `json:"error,omitempty"`
 }
 
 // Device is an Arista switch managed via CloudVision.
 type Device struct {
-	Serial     string    `json:"serial"`
-	Hostname   string    `json:"hostname"`
-	Model      string    `json:"model"`
-	Family     string    `json:"family"`
-	Version    string    `json:"version"`
-	MgmtIP     string    `json:"mgmtIp"`
-	DataCenter string    `json:"dataCenter"`
-	Role       string    `json:"role"` // spine / leaf / mgmt
-	Status     string    `json:"status"`
-	UptimeSec  int64     `json:"uptimeSec"`
-	PortTotal  int       `json:"portTotal"`
-	PortUp     int       `json:"portUp"`
-	PortUsed   int       `json:"portUsed"`
-	PortFree   int       `json:"portFree"`
-	PortErr    int       `json:"portErr"`
-	InBps      float64   `json:"inBps"`
-	OutBps     float64   `json:"outBps"`
-	MaxUtilPct float64   `json:"maxUtilPct"`
-	LastPoll   time.Time `json:"lastPoll"`
+	Serial        string    `json:"serial"`
+	Hostname      string    `json:"hostname"`
+	Model         string    `json:"model"`
+	Family        string    `json:"family"`
+	Version       string    `json:"version"`
+	MgmtIP        string    `json:"mgmtIp"`
+	DataCenter    string    `json:"dataCenter"`
+	Role          string    `json:"role"` // spine / leaf / mgmt
+	Status        string    `json:"status"`
+	UptimeSec     int64     `json:"uptimeSec"`
+	PortTotal     int       `json:"portTotal"`
+	PortUp        int       `json:"portUp"`
+	PortUsed      int       `json:"portUsed"`
+	PortFree      int       `json:"portFree"`
+	PortFreeReady int       `json:"portFreeReady"` // free ports with an optic installed
+	PortErr       int       `json:"portErr"`
+	OpticAlarms   int       `json:"opticAlarms"`
+	InBps         float64   `json:"inBps"`
+	OutBps        float64   `json:"outBps"`
+	MaxUtilPct    float64   `json:"maxUtilPct"`
+	LastPoll      time.Time `json:"lastPoll"`
 }
 
 // Interface is a single physical/logical port on a device with its current
@@ -95,6 +99,23 @@ type Interface struct {
 	OutDiscards int64     `json:"outDiscards"`
 	LastChange  time.Time `json:"lastChange"`
 	Neighbor    string    `json:"neighbor,omitempty"` // LLDP neighbor
+
+	// Transceiver (optic / "GBIC") inventory. HasTransceiver distinguishes a
+	// free port that already has an optic installed (ready to use) from a truly
+	// empty port. MediaType is the optic/cable type (e.g. 100GBASE-SR4).
+	HasTransceiver bool   `json:"hasTransceiver"`
+	MediaType      string `json:"mediaType,omitempty"`
+	XcvrVendor     string `json:"xcvrVendor,omitempty"`
+	XcvrPart       string `json:"xcvrPart,omitempty"`
+	XcvrSerial     string `json:"xcvrSerial,omitempty"`
+
+	// DOM (Digital Optical Monitoring) readings for the installed optic.
+	DomValid   bool    `json:"domValid"`
+	TxPowerDbm float64 `json:"txPowerDbm,omitempty"`
+	RxPowerDbm float64 `json:"rxPowerDbm,omitempty"`
+	TempC      float64 `json:"tempC,omitempty"`
+	VoltageV   float64 `json:"voltageV,omitempty"`
+	OpticAlarm string  `json:"opticAlarm,omitempty"` // "", low-rx, low-tx, high-temp
 }
 
 // Counters holds raw interface counters sampled at a point in time. Rates are
@@ -125,8 +146,11 @@ type Summary struct {
 	PortTotal     int           `json:"portTotal"`
 	PortUsed      int           `json:"portUsed"`
 	PortFree      int           `json:"portFree"`
+	PortFreeReady int           `json:"portFreeReady"` // free ports with an optic installed
+	PortFreeEmpty int           `json:"portFreeEmpty"` // free ports with no optic
 	PortDisabled  int           `json:"portDisabled"`
 	PortError     int           `json:"portError"`
+	OpticAlarms   int           `json:"opticAlarms"`
 	TotalInBps    float64       `json:"totalInBps"`
 	TotalOutBps   float64       `json:"totalOutBps"`
 	ByFamily      []FamilyCount `json:"byFamily"`

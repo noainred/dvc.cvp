@@ -29,13 +29,33 @@ type eapiParam struct {
 }
 
 type eapiResp struct {
-	Result []struct {
-		Interfaces map[string]eapiIface `json:"interfaces"`
-	} `json:"result"`
-	Error *struct {
+	Result []json.RawMessage `json:"result"`
+	Error  *struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+// ifacesResult decodes the `show interfaces` command output.
+type ifacesResult struct {
+	Interfaces map[string]eapiIface `json:"interfaces"`
+}
+
+// xcvrResult decodes the `show interfaces transceiver` command output. EOS
+// field names vary slightly across releases, so parsing is best-effort.
+type xcvrResult struct {
+	Interfaces map[string]eapiXcvr `json:"interfaces"`
+}
+
+type eapiXcvr struct {
+	MediaType   string  `json:"mediaType"`
+	VendorName  string  `json:"vendorName"`
+	VendorSn    string  `json:"vendorSn"`
+	VendorPn    string  `json:"vendorPn"`
+	Temperature float64 `json:"temperature"`
+	Voltage     float64 `json:"voltage"`
+	TxPower     float64 `json:"txPower"`
+	RxPower     float64 `json:"rxPower"`
 }
 
 type eapiIface struct {
@@ -61,7 +81,7 @@ func fetchInterfaces(ctx context.Context, hc *http.Client, ip, user, pass string
 	reqBody, _ := json.Marshal(eapiReq{
 		JSONRPC: "2.0",
 		Method:  "runCmds",
-		Params:  eapiParam{Version: 1, Cmds: []string{"show interfaces"}, Format: "json"},
+		Params:  eapiParam{Version: 1, Cmds: []string{"show interfaces", "show interfaces transceiver"}, Format: "json"},
 		ID:      "dvc-cvp",
 	})
 	url := fmt.Sprintf("https://%s/command-api", ip)
@@ -93,14 +113,27 @@ func fetchInterfaces(ctx context.Context, hc *http.Client, ip, user, pass string
 		return nil, fmt.Errorf("eapi %s: empty result", ip)
 	}
 
+	var ir ifacesResult
+	if err := json.Unmarshal(er.Result[0], &ir); err != nil {
+		return nil, fmt.Errorf("eapi %s: decode interfaces: %w", ip, err)
+	}
+	// Transceiver data is optional/best-effort (second command).
+	xcvr := map[string]eapiXcvr{}
+	if len(er.Result) > 1 {
+		var xr xcvrResult
+		if err := json.Unmarshal(er.Result[1], &xr); err == nil {
+			xcvr = xr.Interfaces
+		}
+	}
+
 	now := time.Now()
-	ports := make([]collector.PortSample, 0, len(er.Result[0].Interfaces))
-	for name, ifc := range er.Result[0].Interfaces {
+	ports := make([]collector.PortSample, 0, len(ir.Interfaces))
+	for name, ifc := range ir.Interfaces {
 		if !isPort(name) {
 			continue
 		}
 		admin, oper := mapStatus(ifc.InterfaceStatus)
-		ports = append(ports, collector.PortSample{
+		p := collector.PortSample{
 			Name:        name,
 			Description: ifc.Description,
 			AdminStatus: admin,
@@ -116,9 +149,34 @@ func fetchInterfaces(ctx context.Context, hc *http.Client, ip, user, pass string
 				OutDiscards: uint64(ifc.InterfaceCounters.OutDiscards),
 				Timestamp:   now,
 			},
-		})
+		}
+		if x, ok := xcvr[name]; ok {
+			applyXcvr(&p, x, oper)
+		}
+		ports = append(ports, p)
 	}
 	return ports, nil
+}
+
+// applyXcvr merges transceiver/DOM data into a port sample. Presence is
+// inferred from a non-empty, non-copper media type; DOM is considered valid
+// only for a connected optic reporting optical power.
+func applyXcvr(p *collector.PortSample, x eapiXcvr, oper string) {
+	p.MediaType = x.MediaType
+	if x.MediaType == "" || strings.Contains(x.MediaType, "BASE-T") {
+		return // copper / no pluggable optic
+	}
+	p.HasTransceiver = true
+	p.XcvrVendor = x.VendorName
+	p.XcvrPart = x.VendorPn
+	p.XcvrSerial = x.VendorSn
+	if oper == "connected" && (x.TxPower != 0 || x.RxPower != 0) {
+		p.DomValid = true
+		p.TxPowerDbm = x.TxPower
+		p.RxPowerDbm = x.RxPower
+		p.TempC = x.Temperature
+		p.VoltageV = x.Voltage
+	}
 }
 
 // isPort keeps physical Ethernet, management and port-channel interfaces and

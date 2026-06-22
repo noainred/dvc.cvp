@@ -24,7 +24,26 @@ type PortSample struct {
 	Neighbor    string
 	LastChange  time.Time
 	Counters    model.Counters
+
+	// Transceiver / optics (GBIC) inventory and DOM readings.
+	HasTransceiver bool
+	MediaType      string
+	XcvrVendor     string
+	XcvrPart       string
+	XcvrSerial     string
+	DomValid       bool
+	TxPowerDbm     float64
+	RxPowerDbm     float64
+	TempC          float64
+	VoltageV       float64
 }
+
+// Optical alarm thresholds used to flag a degrading optic.
+const (
+	rxLowDbm  = -16.0
+	txLowDbm  = -11.0
+	tempHighC = 70.0
+)
 
 // DeviceSample carries a device's metadata plus its port samples for one poll.
 type DeviceSample struct {
@@ -112,8 +131,8 @@ func (c *Collector) pollOnce(ctx context.Context) {
 		dev := ds.Device
 		dev.LastPoll = now
 		dev.PortTotal = len(ifaces)
-		dev.PortUp, dev.PortUsed, dev.PortFree, dev.PortErr = 0, 0, 0, 0
-		dev.InBps, dev.OutBps, dev.MaxUtilPct = 0, 0, 0
+		dev.PortUp, dev.PortUsed, dev.PortFree, dev.PortFreeReady, dev.PortErr = 0, 0, 0, 0, 0
+		dev.InBps, dev.OutBps, dev.MaxUtilPct, dev.OpticAlarms = 0, 0, 0, 0
 		for _, ifc := range ifaces {
 			if ifc.OperStatus == "connected" || ifc.OperStatus == "up" {
 				dev.PortUp++
@@ -123,8 +142,14 @@ func (c *Collector) pollOnce(ctx context.Context) {
 				dev.PortUsed++
 			case model.PortFree:
 				dev.PortFree++
+				if ifc.HasTransceiver {
+					dev.PortFreeReady++
+				}
 			case model.PortError:
 				dev.PortErr++
+			}
+			if ifc.OpticAlarm != "" {
+				dev.OpticAlarms++
 			}
 			dev.InBps += ifc.InBps
 			dev.OutBps += ifc.OutBps
@@ -144,6 +169,8 @@ func (c *Collector) pollOnce(ctx context.Context) {
 			dc.PortTotal += dev.PortTotal
 			dc.PortUsed += dev.PortUsed
 			dc.PortFree += dev.PortFree
+			dc.PortFreeReady += dev.PortFreeReady
+			dc.OpticAlarms += dev.OpticAlarms
 			dc.InBps += dev.InBps
 			dc.OutBps += dev.OutBps
 			if dev.MaxUtilPct > dc.MaxUtilPct {
@@ -198,6 +225,20 @@ func (c *Collector) deriveInterfaces(ds DeviceSample, now time.Time) []model.Int
 		}
 		ifc.UtilPct = max(ifc.InUtilPct, ifc.OutUtilPct)
 		ifc.State = classify(p)
+
+		// Transceiver / DOM.
+		ifc.HasTransceiver = p.HasTransceiver
+		ifc.MediaType = p.MediaType
+		ifc.XcvrVendor = p.XcvrVendor
+		ifc.XcvrPart = p.XcvrPart
+		ifc.XcvrSerial = p.XcvrSerial
+		ifc.DomValid = p.DomValid
+		ifc.TxPowerDbm = p.TxPowerDbm
+		ifc.RxPowerDbm = p.RxPowerDbm
+		ifc.TempC = p.TempC
+		ifc.VoltageV = p.VoltageV
+		ifc.OpticAlarm = opticAlarm(p)
+
 		out = append(out, ifc)
 	}
 	return out
@@ -216,6 +257,23 @@ func classify(p PortSample) string {
 		return model.PortUsed
 	}
 	return model.PortFree
+}
+
+// opticAlarm flags a degrading optic from its DOM readings. It returns an empty
+// string when the optic is healthy or has no valid DOM data.
+func opticAlarm(p PortSample) string {
+	if !p.DomValid {
+		return ""
+	}
+	switch {
+	case p.RxPowerDbm < rxLowDbm:
+		return "low-rx"
+	case p.TxPowerDbm < txLowDbm:
+		return "low-tx"
+	case p.TempC > tempHighC:
+		return "high-temp"
+	}
+	return ""
 }
 
 // rate computes bits/second from the octet delta between two counter samples.

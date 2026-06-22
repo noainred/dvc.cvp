@@ -13,8 +13,11 @@ export interface Summary {
   portTotal: number
   portUsed: number
   portFree: number
+  portFreeReady: number
+  portFreeEmpty: number
   portDisabled: number
   portError: number
+  opticAlarms: number
   totalInBps: number
   totalOutBps: number
   byFamily: FamilyCount[]
@@ -33,6 +36,8 @@ export interface DataCenter {
   portTotal: number
   portUsed: number
   portFree: number
+  portFreeReady: number
+  opticAlarms: number
   inBps: number
   outBps: number
   maxUtilPct: number
@@ -55,7 +60,9 @@ export interface Device {
   portUp: number
   portUsed: number
   portFree: number
+  portFreeReady: number
   portErr: number
+  opticAlarms: number
   inBps: number
   outBps: number
   maxUtilPct: number
@@ -81,6 +88,17 @@ export interface Interface {
   outDiscards: number
   lastChange: string
   neighbor?: string
+  hasTransceiver: boolean
+  mediaType?: string
+  xcvrVendor?: string
+  xcvrPart?: string
+  xcvrSerial?: string
+  domValid: boolean
+  txPowerDbm?: number
+  rxPowerDbm?: number
+  tempC?: number
+  voltageV?: number
+  opticAlarm?: string
 }
 
 export interface Sample {

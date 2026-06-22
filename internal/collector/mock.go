@@ -46,6 +46,14 @@ type mockPort struct {
 	inDisc     uint64
 	outDisc    uint64
 	lastChange time.Time
+
+	// transceiver / optics
+	hasXcvr   bool
+	mediaType string
+	vendor    string
+	pn        string
+	sn        string
+	domBad    bool // simulate a degrading optic (low Rx)
 }
 
 // site describes one simulated data center for the demo topology.
@@ -197,6 +205,7 @@ func (m *Mock) newPort(name string, speed int64, connected bool, base float64, u
 		neighbor:   neighbor,
 		lastChange: time.Now().Add(-time.Duration(m.rnd.Intn(72)) * time.Hour),
 	}
+	m.setOptics(p, connected)
 	if connected {
 		p.oper = "connected"
 		if uplink {
@@ -206,6 +215,31 @@ func (m *Mock) newPort(name string, speed int64, connected bool, base float64, u
 		}
 	}
 	return p
+}
+
+// setOptics assigns a transceiver (optic) to a port based on its speed. Copper
+// 1G ports are RJ45 (no pluggable optic). Fiber ports always have an optic when
+// connected; free fiber ports have one ~55% of the time (patched and ready).
+func (m *Mock) setOptics(p *mockPort, connected bool) {
+	switch p.speed {
+	case 1e9:
+		p.mediaType = "1000BASE-T" // copper RJ45, no pluggable optic
+		return
+	case 25e9:
+		p.mediaType, p.pn = "25GBASE-SR", "SFP-25G-SR"
+	case 10e9:
+		p.mediaType, p.pn = "10GBASE-SR", "SFP-10G-SR"
+	case 100e9:
+		p.mediaType, p.pn = "100GBASE-SR4", "QSFP-100G-SR4"
+	default:
+		p.mediaType, p.pn = "100GBASE-SR4", "QSFP-100G-SR4"
+	}
+	p.hasXcvr = connected || m.rnd.Float64() < 0.55
+	if p.hasXcvr {
+		p.vendor = "Arista Networks"
+		p.sn = fmt.Sprintf("XCVR%08d", m.rnd.Intn(100000000))
+		p.domBad = connected && m.rnd.Float64() < 0.04
+	}
 }
 
 func (m *Mock) mgmtPort() *mockPort {
@@ -252,6 +286,20 @@ func (m *Mock) Poll(_ context.Context) (*Snapshot, error) {
 					p.inDisc += uint64(m.rnd.Intn(20))
 				}
 			}
+			// DOM is meaningful only for a powered optic carrying light.
+			domValid := p.hasXcvr && p.mediaType != "" && p.mediaType != "1000BASE-T" &&
+				(p.oper == "connected" || p.oper == "up")
+			var tx, rx, temp, volt float64
+			if domValid {
+				temp = 36 + 8*math.Sin(2*math.Pi*float64(elapsed)/900+p.phase) + (m.rnd.Float64() - 0.5)
+				volt = 3.30 + (m.rnd.Float64()-0.5)*0.04
+				tx = -2.3 + (m.rnd.Float64()-0.5)*0.4
+				if p.domBad {
+					rx = -18.5 - m.rnd.Float64()*1.5 // below low-Rx threshold -> alarm
+				} else {
+					rx = -4.5 + (m.rnd.Float64()-0.5)*1.2
+				}
+			}
 			ports = append(ports, PortSample{
 				Name: p.name, Description: p.desc, AdminStatus: p.admin,
 				OperStatus: p.oper, SpeedBps: p.speed, Neighbor: p.neighbor,
@@ -262,6 +310,10 @@ func (m *Mock) Poll(_ context.Context) (*Snapshot, error) {
 					InDiscards: p.inDisc, OutDiscards: p.outDisc,
 					Timestamp: now,
 				},
+				HasTransceiver: p.hasXcvr, MediaType: p.mediaType,
+				XcvrVendor: p.vendor, XcvrPart: p.pn, XcvrSerial: p.sn,
+				DomValid: domValid, TxPowerDbm: tx, RxPowerDbm: rx,
+				TempC: temp, VoltageV: volt,
 			})
 		}
 		devs = append(devs, DeviceSample{Device: md.dev, Ports: ports})
