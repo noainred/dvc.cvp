@@ -62,13 +62,21 @@ async function checkAuth() {
 
 $("#loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const msg = $("#loginMsg"); msg.textContent = "";
+  const msg = $("#loginMsg"); msg.textContent = "확인 중…";
   const fd = new FormData(e.target);
   try {
-    await api("/api/auth/login", { method: "POST", body: JSON.stringify({ username: fd.get("username"), code: fd.get("code") }) });
-    hideLogin();
-    boot();
-  } catch (err) { msg.textContent = err.message; }
+    // Direct fetch so the real error (wrong code / banned) is shown instead of
+    // being swallowed by the generic 401 handler.
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: fd.get("username"), code: (fd.get("code") || "").trim() }),
+    });
+    if (res.ok) { msg.textContent = ""; hideLogin(); boot(); return; }
+    let detail = "로그인 실패";
+    try { detail = (await res.json()).detail || detail; } catch (_) {}
+    msg.textContent = detail;
+  } catch (err) { msg.textContent = "오류: " + err.message; }
 });
 $("#logoutBtn").addEventListener("click", async () => {
   await api("/api/auth/logout", { method: "POST" });
