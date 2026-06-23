@@ -1,0 +1,29 @@
+# Binaries
+/bin/
+/dist/
+dvc-cvp
+*.exe
+
+# Config with secrets
+config/config.yaml
+*.local.yaml
+
+# Go
+*.test
+*.out
+
+# Persistent history DB
+/data/
+*.db
+
+# Node / frontend
+web/node_modules/
+web/dist/
+npm-debug.log*
+yarn-error.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
